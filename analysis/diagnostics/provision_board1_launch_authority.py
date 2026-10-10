@@ -33,6 +33,7 @@ import shutil
 import subprocess
 import tempfile
 
+from evidence_provenance import private_evidence_files
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -117,6 +118,7 @@ def file_record(path: Path, *, private: bool = False) -> dict[str, object]:
     return record
 
 
+@private_evidence_files()
 def write_exclusive(path: Path, value: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as handle:
@@ -133,6 +135,7 @@ def commit_partial_create_once(partial: Path, path: Path, noun: str) -> None:
     partial.unlink()
 
 
+@private_evidence_files()
 def atomic_manifest(path: Path, value: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -247,7 +250,7 @@ def require_create_once(paths: dict[str, Path]) -> None:
     collisions: list[str] = []
     for path in paths.values():
         for candidate in (path, partial_path(path)):
-            if candidate.exists():
+            if candidate.exists() or candidate.is_symlink():
                 collisions.append(str(candidate))
     if collisions:
         raise SystemExit(
@@ -564,6 +567,7 @@ def manifest_artifact(path: Path, *, private: bool = False) -> dict[str, object]
     return file_record(path, private=private) if path.is_file() else None
 
 
+@private_evidence_files()
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prefix", type=Path, required=True)

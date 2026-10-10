@@ -12,6 +12,7 @@ import shutil
 import struct
 import subprocess
 
+from evidence_provenance import private_evidence_files, write_create_once
 
 RECEIVER_SYMBOLS = {"s_ctt": 32, "s_ctt_queue": 648}
 TRANSMITTER_SYMBOLS = {"ctt_tx_diag_state": 44}
@@ -86,12 +87,23 @@ def savebin_script(items: dict[str, dict[str, int]], prefix: str) -> str:
     return "\n".join(lines)
 
 
+def require_new_outputs(paths: list[Path]) -> None:
+    collisions = [str(path) for path in paths if path.exists() or path.is_symlink()]
+    if collisions:
+        raise SystemExit("refusing to overwrite CTT evidence: " + ", ".join(collisions))
+
+
+@private_evidence_files()
 def generate(args: argparse.Namespace) -> None:
     receiver = args.receiver_elf.resolve()
     transmitter = args.transmitter_elf.resolve()
     output = args.output_dir.resolve()
     if not receiver.is_file() or not transmitter.is_file():
         raise SystemExit("both exact diagnostic ELFs must exist")
+    manifest_path = output / "manifest.json"
+    receiver_script = output / "read_receiver.jlink"
+    transmitter_script = output / "read_transmitter.jlink"
+    require_new_outputs([manifest_path, receiver_script, transmitter_script])
 
     receiver_symbols = require_symbols(receiver, RECEIVER_SYMBOLS)
     transmitter_symbols = require_symbols(transmitter, TRANSMITTER_SYMBOLS)
@@ -124,14 +136,14 @@ def generate(args: argparse.Namespace) -> None:
             "tx_attempts": FRAME_COUNT,
         },
     }
-    (output / "manifest.json").write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    write_create_once(
+        manifest_path, (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
     )
-    (output / "read_receiver.jlink").write_text(
-        savebin_script(receiver_symbols, "ctt_receiver"), encoding="utf-8"
+    write_create_once(
+        receiver_script, savebin_script(receiver_symbols, "ctt_receiver").encode()
     )
-    (output / "read_transmitter.jlink").write_text(
-        savebin_script(transmitter_symbols, "ctt_transmitter"), encoding="utf-8"
+    write_create_once(
+        transmitter_script, savebin_script(transmitter_symbols, "ctt_transmitter").encode()
     )
     print(f"PASS: generated exact-ELF CTT HIL bundle in {output}")
 
@@ -164,6 +176,7 @@ def read_exact(path: Path, size: int) -> bytes:
 
 
 def evaluate(args: argparse.Namespace) -> None:
+    require_new_outputs([args.output])
     stats = read_exact(args.receiver_stats, 32)
     queue = read_exact(args.receiver_queue, 648)
     tx = read_exact(args.transmitter_state, 44)
@@ -237,8 +250,8 @@ def evaluate(args: argparse.Namespace) -> None:
         "receiver": receiver,
         "transmitter": transmitter,
     }
-    args.output.write_text(
-        json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    write_create_once(
+        args.output, (json.dumps(result, indent=2, sort_keys=True) + "\n").encode()
     )
     if not passed:
         failed = ", ".join(name for name, ok in checks.items() if not ok)

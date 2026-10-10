@@ -3,10 +3,14 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import tempfile
 
-from evidence_provenance import record, verify, write_create_once
+from evidence_provenance import (
+    atomic_manifest, private_evidence_files, record, verify, write_create_once,
+    write_exclusive,
+)
 
 
 def expect_failure(value: dict, phrase: str) -> None:
@@ -20,6 +24,42 @@ def expect_failure(value: dict, phrase: str) -> None:
 
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="stratolink-provenance-test-") as raw:
+        root = Path(raw)
+        existing_mode = root.stat().st_mode & 0o777
+        previous = os.umask(0o022)
+        try:
+            for name, writer, value in (
+                ("text", write_exclusive, "synthetic"),
+                ("bytes", write_create_once, b"synthetic"),
+                ("manifest", atomic_manifest, {"synthetic": True}),
+            ):
+                path = root / name / "nested" / "evidence"
+                writer(path, value)
+                assert path.stat().st_mode & 0o777 == 0o600
+                assert path.parent.stat().st_mode & 0o777 == 0o700
+                assert path.parent.parent.stat().st_mode & 0o777 == 0o700
+                assert os.umask(0o022) == 0o022
+            try:
+                with private_evidence_files():
+                    raise RuntimeError("synthetic")
+            except RuntimeError:
+                pass
+            assert os.umask(0o022) == 0o022
+        finally:
+            os.umask(previous)
+        assert root.stat().st_mode & 0o777 == existing_mode
+
+        target = root / "must-not-create"
+        alias = root / "dangling-link"
+        alias.symlink_to(target)
+        try:
+            write_create_once(alias, b"synthetic")
+        except FileExistsError:
+            pass
+        else:
+            raise AssertionError("create-once evidence followed a dangling symlink")
+        assert not target.exists()
+
         immutable = Path(raw) / "immutable.json"
         write_create_once(immutable, b"first\n")
         assert immutable.read_bytes() == b"first\n"

@@ -67,6 +67,7 @@ def run_wrapper(
         capture_output=True,
         check=False,
         env=environment,
+        umask=0o022,
     )
 
 
@@ -267,7 +268,7 @@ def main() -> None:
         environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
         environment["EXPECTED_JLINK_SERIAL"] = SERIAL
 
-        success_prefix = root / "success"
+        success_prefix = root / "new private parent" / "nested" / "success"
         success = run_wrapper(
             success_prefix,
             binary,
@@ -276,6 +277,10 @@ def main() -> None:
             environment=environment,
         )
         assert success.returncode == 0, success.stdout + success.stderr
+        assert success_prefix.parent.stat().st_mode & 0o777 == 0o700
+        assert success_prefix.parent.parent.stat().st_mode & 0o777 == 0o700
+        for path in success_prefix.parent.iterdir():
+            assert path.stat().st_mode & 0o777 == 0o600, str(path)
         success_paths = artifact_paths(success_prefix)
         manifest = json.loads(success_paths["manifest"].read_text(encoding="utf-8"))
         assert manifest["passed"] is True

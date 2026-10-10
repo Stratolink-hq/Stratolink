@@ -35,6 +35,7 @@ from decode_flight_state import parse_memory, read_bytes
 from evidence_provenance import (
     atomic_manifest,
     commit_partial_create_once,
+    private_evidence_files,
     write_exclusive,
 )
 
@@ -162,7 +163,7 @@ def require_create_once(prefix: Path, paths: dict[str, Path]) -> None:
     collisions: list[str] = []
     for path in paths.values():
         for candidate in (path, path.with_suffix(path.suffix + ".partial")):
-            if candidate.exists():
+            if candidate.exists() or candidate.is_symlink():
                 collisions.append(str(candidate))
     collisions.extend(
         str(path) for path in prefix.parent.glob(prefix.name + "_attempt*_raw.txt")
@@ -188,6 +189,13 @@ def build_jlink_script() -> str:
     )
 
 
+def jlink_path(path: Path) -> str:
+    value = str(path.resolve())
+    if any(character in value for character in ('"', '\r', '\n')):
+        raise SystemExit("refusing unsafe J-Link path")
+    return f'"{value}"'
+
+
 def build_commander_script(paths: dict[str, Path]) -> str:
     ram_partial = paths["ram"].with_suffix(".bin.partial")
     optr_partial = paths["flash_optr"].with_suffix(".bin.partial")
@@ -198,10 +206,10 @@ def build_commander_script(paths: dict[str, Path]) -> str:
             # Keep initial connect fail-fast; read/halt errors must still reach g.
             "ExitOnError 0",
             "h",
-            f"savebin {ram_partial} 0x{RAM_ADDRESS:08X} 0x{RAM_BYTES:08X}",
+            f"savebin {jlink_path(ram_partial)} 0x{RAM_ADDRESS:08X} 0x{RAM_BYTES:08X}",
             f"mem32 0x{TAMP_ADDRESS:08X} 0x{TAMP_WORDS:02X}",
-            f"savebin {optr_partial} 0x{FLASH_OPTR_ADDRESS:08X} 0x{FLASH_OPTR_BYTES:08X}",
-            f"savebin {flash_partial} 0x{FLASH_ADDRESS:08X} 0x{FLASH_BYTES:08X}",
+            f"savebin {jlink_path(optr_partial)} 0x{FLASH_OPTR_ADDRESS:08X} 0x{FLASH_OPTR_BYTES:08X}",
+            f"savebin {jlink_path(flash_partial)} 0x{FLASH_ADDRESS:08X} 0x{FLASH_BYTES:08X}",
             "g",
             "exit",
             "",
@@ -209,6 +217,7 @@ def build_commander_script(paths: dict[str, Path]) -> str:
     )
 
 
+@private_evidence_files()
 def write_bytes_exclusive(path: Path, value: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("xb") as handle:
@@ -423,6 +432,7 @@ def run_attempt(
     return raw, metadata
 
 
+@private_evidence_files()
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prefix", type=Path, required=True)
@@ -464,6 +474,7 @@ def main() -> None:
     prefix = args.prefix.resolve()
     paths = artifact_paths(prefix)
     require_create_once(prefix, paths)
+    build_commander_script(paths)
     if args.check_only:
         print(
             json.dumps(
