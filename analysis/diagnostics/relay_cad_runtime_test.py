@@ -40,6 +40,7 @@ def harness() -> str:
     old_scan = old_scan.replace("SX126x::", "FakeRadio::", 1)
     phy = block(source, "static bool radio_apply_lora_phy(") + "\n" + block(source, "static bool radio_apply_lorawan_tx(")
     primary = block(source, "static bool send_uplink_port_mode(")
+    explicit_port = block(source, "bool lorawan_send_uplink_port(")
     return r'''
 #define B2B_FLEET_KEY "000102030405060708090a0b0c0d0e0f"
 #include "config.h"
@@ -73,6 +74,7 @@ static uint32_t clock_ms, cad_at, elapsed_origin;
 static bool cad_active, cad_ever, irq_pending, mesh_input, mesh_delivered;
 static bool in_primary, started_after_stale;
 static bool adc_preempted, restore_failed, setup_preempted;
+static bool api_save_ok = true, api_phy_ok = true, api_tx_fault;
 static unsigned tx_count, cad_count, guard_count, init_count, resets, rx_arms;
 static unsigned checks, failures;
 static const char* name;
@@ -141,6 +143,7 @@ struct FakeRadio {
     }
     int16_t setFrequency(float v) {
         frequency = v;
+        if (!api_phy_ok) return -77;
         if (stimulus == Scenario::RestoreFirst && cad_ever && v == 904.1f && !restore_failed) {
             restore_failed = true; return -75;
         }
@@ -198,6 +201,7 @@ struct FakeRadio {
         if (in_primary) {
             expect(sf == 9 && bandwidth == 125.0f && sync == 0x34 && coding == 5 &&
                    preamble == 8 && crc && !iq, "next primary uses exact LoRaWAN PHY");
+            if (api_tx_fault) return -74;
         } else {
             expect(sync == 0x2B && sf == 11 && bandwidth == 250.0f,
                    "optional TX retains original LongFast PHY");
@@ -249,14 +253,15 @@ static void retire_invalid_liveness_session() { _joined = false; }
 static void fail_session_persistence() { _joined = false; }
 static void compute_mic(const uint8_t*, size_t, uint8_t* mic) { std::memset(mic, 0, 4); }
 void lorawan_export_session(lorawan_session_t* session) { *session = {}; }
-static bool power_manager_save_session(const lorawan_session_t*) { return true; }
-''' + primary + "\n" + window + r'''
+static bool power_manager_save_session(const lorawan_session_t*) { return api_save_ok; }
+''' + primary + "\n" + explicit_port + "\n" + window + r'''
 
 static void reset(Scenario selected, const char* label, bool mesh, uint32_t start = 0) {
     stimulus = selected; name = label; clock_ms = elapsed_origin = start;
     cad_at = 0; cad_active = cad_ever = irq_pending = false;
     mesh_input = mesh; mesh_delivered = false; in_primary = started_after_stale = false;
     adc_preempted = restore_failed = setup_preempted = false;
+    api_save_ok = api_phy_ok = true; api_tx_fault = false;
     tx_count = cad_count = guard_count = init_count = resets = rx_arms = 0;
     events.clear(); device = FakeRadio{}; device.mod = &device.backing;
     device.backing.hal = &device.backing.backing;
@@ -302,6 +307,34 @@ static void seed_route(unsigned route) {
     } else if (route == 2) (void)seed_forward();
 }
 int main() {
+    // Exercise the actual driver and public wrapper, not the scheduler's TX
+    // boundary double: only a handoff to transmit may debit an auxiliary slot.
+    uint8_t payload[4] = {}; bool handed_off = true;
+    reset(Scenario::Clear, "explicit-port invalid input", false); in_primary = true;
+    expect(!lorawan_send_uplink_port(0, payload, 4, &handed_off) &&
+           !handed_off && events.empty(), "invalid FPort has no RF handoff");
+    handed_off = true;
+    expect(!lorawan_send_uplink_port(11, nullptr, 4, &handed_off) &&
+           !handed_off && events.empty(), "null payload has no RF handoff");
+    reset(Scenario::Clear, "explicit-port PHY failure", false); in_primary = true;
+    api_phy_ok = false; handed_off = true;
+    expect(!lorawan_send_uplink_port(11, payload, 4, &handed_off) &&
+           !handed_off && fCntUp == 0, "PHY rejection has no RF handoff");
+    reset(Scenario::Clear, "explicit-port reservation failure", false); in_primary = true;
+    api_save_ok = false; handed_off = true;
+    expect(!lorawan_send_uplink_port(11, payload, 4, &handed_off) &&
+           !handed_off && !_joined,
+           "reservation failure has no RF handoff and revokes session");
+    reset(Scenario::Clear, "explicit-port transmit error", false); in_primary = true;
+    api_tx_fault = true; handed_off = false;
+    expect(!lorawan_send_uplink_port(11, payload, 4, &handed_off) &&
+           handed_off && fCntUp == 1,
+           "RF handoff is reported despite transmit error");
+    reset(Scenario::Clear, "explicit-port successful transmit", false); in_primary = true;
+    handed_off = false;
+    expect(lorawan_send_uplink_port(11, payload, 4, &handed_off) &&
+           handed_off && fCntUp == 1, "successful transmit reports RF handoff");
+
     for (unsigned route = 0; route < 3; ++route) {
         reset(Scenario::Missing, route == 0 ? "missing IRQ mesh" : route == 1 ? "missing IRQ origin" : "missing IRQ forward", route == 0);
         b2b_frame_t original = {};
@@ -450,6 +483,12 @@ def main() -> None:
             power_adc_read_solar_mv() < RELAY_SOLAR_MIN_MV)"""
     assert code.count(stale_gate) == 2
     mutants = [
+        ("RF handoff omitted", mutate("if (counter_reserved) *counter_reserved = true;",
+         "if (counter_reserved) *counter_reserved = false;"),
+         "RF handoff is reported despite transmit error"),
+        ("pre-RF failure charged", mutate("if (counter_reserved) *counter_reserved = false;",
+         "if (counter_reserved) *counter_reserved = true;"),
+         "reservation failure has no RF handoff and revokes session"),
         ("IRQ timeout removed", mutate("millis() - cad_started_ms >= 100u", "millis() - cad_started_ms >= 10000u"),
          "missing IRQ wait bounded to100ms"),
         ("immediate IRQ erased", mutate("state = radio->startChannelScan();", "state = radio->startChannelScan(); s_relay_cad_done = false;"),

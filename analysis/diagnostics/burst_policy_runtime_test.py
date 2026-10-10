@@ -295,7 +295,7 @@ int main() {
            "exact GPS floor retains rapid initial budget");
 
     // Break: consuming pending in abort, skipping its return, double quiescing
-    // GPS, or resetting/debiting a partially completed active burst.
+    // GPS, or restarting an already-active burst instead of completing work.
     for (bool attempted : {false, true}) {
         reset("mid-acquisition abort handoff");
         Cycle interrupted; interrupted.edge_after_acquisition = true;
@@ -310,10 +310,47 @@ int main() {
     }
     reset("partial burst abort handoff"); cycle(edge()); cycle();
     Cycle interrupted; interrupted.edge_after_acquisition = true; cycle(interrupted);
-    expect(burst_mode && burst_cycles == 2 && burst_work_boundaries == 2 && s_burst_wake,
-           "aborted burst retains already-completed cycle count");
-    cycle(); expect(burst_cycles == 3 && burst_work_boundaries == 3,
-                    "pending handoff continues existing bout without resetting cap");
+    expect(burst_mode && burst_cycles == 3 && burst_work_boundaries == 3 && !s_burst_wake,
+           "renewed edge completes active burst work instead of restarting acquisition");
+    cycle(edge()); expect(burst_cycles == 4 && burst_work_boundaries == 4,
+                    "renewed edge preserves existing bout count");
+
+    // Break: unconditionally handing off every post-GNSS edge before primary
+    // work, cap accounting, or sleep selection. Low-g and unavailable samples
+    // cannot use the cleared-acceleration noise latch to escape this sequence.
+    for (Accel value : {Accel::Low, Accel::Unavailable}) {
+        reset("recurrent active INT1 edges");
+        Cycle recurrent;
+        recurrent.at_entry = recurrent.at_exit = value;
+        recurrent.edge_after_acquisition = true;
+        for (unsigned i = 0; i < 20; ++i) {
+            recurrent.edge = (i == 0);
+            cycle(recurrent);
+            expect(!s_burst_wake,
+                   "coalesced acquisition edge cannot immediately abort selected sleep");
+        }
+        expect(acquisition_boundaries == 20 && work_boundaries == 20 &&
+               burst_work_boundaries == 6 && burst_cycles == 6 &&
+               !burst_mode && burst_cooldown == 3,
+               "recurrent acquisition edges complete work and cap burst into cooldown");
+        std::vector<uint32_t> expected(20, 1200000);
+        for (unsigned i = 0; i < 5; ++i) expected[i] = 10000;
+        expect(selected_sleep_budgets == expected,
+               "recurrent acquisition edges retain bounded burst and normal sleep budgets");
+        cycle(); cycle(); cycle();
+        expect(burst_cooldown == 0 && !burst_mode,
+               "three later clean wakes rearm after recurrent edges stop");
+        cycle(edge(value, value));
+        expect(burst_mode && burst_cycles == 1 && burst_work_boundaries == 7,
+               "new event after recurrence cooldown can enter a fresh burst");
+    }
+
+    reset("last cooldown wake interrupted"); capped_bout(Accel::Low);
+    cycle(); cycle();
+    Cycle late_edge; late_edge.edge_after_acquisition = true; cycle(late_edge);
+    expect(!burst_mode && burst_cooldown == 3 && work_boundaries == 9 &&
+           !s_burst_wake && selected_sleep_budgets.back() == 1200000,
+           "mid-acquisition edge restarts even the last cooldown wake");
 
     reset("optical recovery overlap");
     s_optical_quiescence_fault = true; cycle();
@@ -360,7 +397,11 @@ def main() -> None:
          "if (power_manager_did_wake_from_freefall()) {",
          "abort preserves pending state and skips work and sleep"),
         ("partial bout restarted", "freefall_wake && !burst_mode &&", "freefall_wake &&",
-         "pending handoff continues existing bout without resetting cap"),
+         "renewed edge preserves existing bout count"),
+        ("repeated handoff starvation",
+         "freefall_wake || burst_mode || freefall_cooldown_active",
+         "freefall_wake && burst_mode && freefall_cooldown_active",
+         "recurrent acquisition edges complete work and cap burst into cooldown"),
         ("entry rail gate bypass", "power_adc_read_vSTOR_mv() >= GPS_ACQ_FLOOR_MV",
          "power_adc_read_vSTOR_mv() > 0u", "no rapid mode without session region and GPS rail"),
         ("exit rail gate bypass", "power_adc_read_vSTOR_mv() < GPS_ACQ_FLOOR_MV",

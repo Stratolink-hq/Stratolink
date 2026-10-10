@@ -100,9 +100,12 @@ bool lorawan_send_uplink(const uint8_t* payload, uint8_t payload_len);
  * Used for sparse typed event packets while preserving the established
  * fPort-1 telemetry contract. Reserves and atomically persists the next
  * FCntUp before RF; a failed transmission may skip a counter but a reset
- * cannot replay one.
+ * cannot replay one. If supplied, rf_handed_off is false for pre-radio
+ * validation/configuration/persistence failures and true once transmit() is
+ * called, even when its error cannot prove that no RF was emitted.
  */
-bool lorawan_send_uplink_port(uint8_t fport, const uint8_t* payload, uint8_t payload_len);
+bool lorawan_send_uplink_port(uint8_t fport, const uint8_t* payload,
+                              uint8_t payload_len, bool* rf_handed_off = nullptr);
 
 /** Send the due fPort-1 liveness probe as ConfirmedDataUp. The pending intent
  *  is included in the same CRC-protected transaction that reserves FCntUp
