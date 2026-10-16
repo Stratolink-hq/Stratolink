@@ -5,13 +5,14 @@ PCB layouts, circuit diagrams, and mechanical designs for Stratolink pico-balloo
 
 - [Complete KiCad project and parts library downloads](downloads/README.md)
 - [Current v1.1 board and fabrication notes](pcb/README.md)
+- [Engineer reroute review and exact changes](../analysis/v1_1_engineer_review_20261015/README.md)
 - [Pilot assembly BOM and placement files](gerbers/v1.1-pilot/README.md)
 
 Download and extract the complete project, or copy the library bundle beside the matching KiCad files. The bundles include the added R24–R27, C22/C23 and U8 footprints.
 
 ## Directory Structure
 - `/pcb` - PCB design files and project files
-- `/gerbers` - Manufacturing-ready Gerber files and drill files
+- `/gerbers` - Gerber and drill files; v1.1 remains a manufacturing review package
 - `/3d-models` - 3D enclosure and mechanical designs
 - `/docs` - Hardware documentation and specifications
   
