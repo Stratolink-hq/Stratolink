@@ -1,13 +1,21 @@
 # Hardware Design
 PCB layouts, circuit diagrams, and mechanical designs for Stratolink pico-balloon hardware.
 
+## v1.1 downloads
+
+- [Complete KiCad project and parts library downloads](downloads/README.md)
+- [Current v1.1 board and fabrication notes](pcb/README.md)
+- [Pilot assembly BOM and placement files](gerbers/v1.1-pilot/README.md)
+
+Download and extract the complete project, or copy the library bundle beside the matching KiCad files. The bundles include the added R24–R27, C22/C23 and U8 footprints.
+
 ## Directory Structure
 - `/pcb` - PCB design files and project files
 - `/gerbers` - Manufacturing-ready Gerber files and drill files
 - `/3d-models` - 3D enclosure and mechanical designs
 - `/docs` - Hardware documentation and specifications
   
-## Hardware Components
+## Flown v1 components (historical)
 1. [RAK3172-9-SM-NI](https://www.lcsc.com/product-detail/C18548052.html?s_z=n_RAK3172) LoRaWAN Module (STM32WLE5)
     - Exact BOM part is RAK's 9xx MHz SKU for US915/AU915/KR920/AS923; EU868 is assigned to the separate `-8` SKU. The wire monopole is modeled across 868/915/923 MHz, but antenna bandwidth does not qualify the module's internal RF matching. Flight-3 EU868 reception is operating evidence only pending conducted/cold RF qualification.
     -     [4269](https://www.digikey.com/en/products/detail/adafruit-industries-llc/4269/10313908) sprint antenna
