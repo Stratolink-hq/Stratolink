@@ -117,6 +117,12 @@ function measureScene() {
   docTop = { launch: launch.getBoundingClientRect().top + scrollY, footer: footer.getBoundingClientRect().top + scrollY };
   footerHeight = footer.offsetHeight;
   headerHeight = header.offsetHeight;
+  // The story only needs to fade under the header where its column would pass beneath the logo, nav or menu button.
+  const { left, right } = story.getBoundingClientRect();
+  const clearOfHeader = [...header.querySelectorAll(':scope > a, .home-nav, .home-menu-toggle')]
+    .map(element => element.getBoundingClientRect())
+    .every(box => box.width === 0 || box.right <= left || box.left >= right);
+  storyWindow.toggleAttribute('data-clear-of-header', clearOfHeader);
   if (cssScroll) writeSceneProgram();
   updateScene();
 }

@@ -145,11 +145,14 @@ img, svg, canvas { display: block; }
   overflow: hidden;
   /* The story fades out just under the logo, whose difference blend would turn both into a smear, and into the
      clouds at the bottom. The logo is centred in the header, so its lower edge sits at ~63% of the header height. */
+  --header-fade: calc(var(--header-height) * .65);
   mask-image:
-    linear-gradient(transparent calc(var(--header-height) * .65), #000 calc(var(--header-height) * .65 + 36px)),
+    linear-gradient(transparent var(--header-fade), #000 calc(var(--header-fade) + 36px)),
     linear-gradient(#000 var(--cloud-fade-start, 100lvh), transparent var(--cloud-fade-end, 100lvh));
   mask-composite: intersect;
 }
+/* main.js marks layouts where the story column runs clear of the logo, nav and menu button; there it stays solid. */
+.story-window[data-clear-of-header] { --header-fade: -36px; }
 
 .story {
   position: absolute;
