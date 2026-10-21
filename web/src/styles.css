@@ -143,7 +143,12 @@ img, svg, canvas { display: block; }
   z-index: 3;
   inset: 0;
   overflow: hidden;
-  mask-image: linear-gradient(#000 var(--cloud-fade-start, 100lvh), transparent var(--cloud-fade-end, 100lvh));
+  /* The story fades out just under the logo, whose difference blend would turn both into a smear, and into the
+     clouds at the bottom. The logo is centred in the header, so its lower edge sits at ~63% of the header height. */
+  mask-image:
+    linear-gradient(transparent calc(var(--header-height) * .65), #000 calc(var(--header-height) * .65 + 36px)),
+    linear-gradient(#000 var(--cloud-fade-start, 100lvh), transparent var(--cloud-fade-end, 100lvh));
+  mask-composite: intersect;
 }
 
 .story {

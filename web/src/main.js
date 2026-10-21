@@ -203,13 +203,10 @@ function updateScene() {
     setStyle(foreground, 'transform', `translate3d(0, ${cityDrop}px, 0)`);
     setStyle(balloon, 'transform', `translate3d(${right}px, ${-up}px, 0)`);
     setStyle(story, 'transform', `translate3d(0, ${-readingTravel * reading}px, 0)`);
-    if (cloudEdge < height) {
-      setStyle(storyWindow, 'maskImage', '');
-      setVar(storyWindow, '--cloud-fade-start', `${cloudEdge}px`);
-      setVar(storyWindow, '--cloud-fade-end', `${cloudEdge + geometry.cloudFeather}px`);
-    } else {
-      setStyle(storyWindow, 'maskImage', 'none');
-    }
+    // Once the clouds have dropped out of frame, push their fade out with them; the header fade stays.
+    const cloudFade = cloudEdge < height ? cloudEdge : 100000;
+    setVar(storyWindow, '--cloud-fade-start', `${cloudFade}px`);
+    setVar(storyWindow, '--cloud-fade-end', `${cloudFade + geometry.cloudFeather}px`);
     revealStory(storyTop, revealLine);
     setStyle(warmth, 'opacity', String(smooth(phase(distance, height * .4, height * .9))));
     setVar(footer, '--reveal', String(smooth(clamp((innerHeight - footerTop) / Math.min(height * .5, footerHeight)))));
