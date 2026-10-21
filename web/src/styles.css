@@ -14,15 +14,20 @@
   --header-height: 100px;
   --story-left: clamp(24px, 8vw, 100px);
   --paper: #f6f4ef;
+  /* index.html uses viewport-fit=cover so the scene fills a landscape phone; keep content clear of the notch. */
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; line-height: 1.5; background: var(--paper); overscroll-behavior: none; }
 a { color: inherit; text-decoration: none; }
 /* Safari tints its status bar and toolbar from thin fixed strips at the viewport edges; it needs about 5px of each.
-   main.js keeps each strip the color of the scene beside it. Phones only, where the scene's edges are near-solid. */
+   main.js keeps each strip the color of the scene beside it. Phones only (portrait or landscape), where the scene's
+   edges are near-solid. */
 .edge { display: none; }
-@media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
+@media (max-width: 767px) and (prefers-reduced-motion: no-preference),
+  (max-height: 500px) and (pointer: coarse) and (prefers-reduced-motion: no-preference) {
   .edge { display: block; position: fixed; left: 0; right: 0; z-index: 24; height: 12px; pointer-events: none; }
   /* Safari reads the topmost fixed element at each edge: above the header and globe portal, under the open menu. */
   .edge-top { top: -7px; z-index: 31; background: #98b2d6; }
@@ -41,7 +46,7 @@ img, svg, canvas { display: block; }
   justify-content: space-between;
   gap: 24px;
   height: var(--header-height);
-  padding-inline: var(--gutter);
+  padding-inline: max(var(--gutter), var(--safe-left)) max(var(--gutter), var(--safe-right));
   color: #fff;
   mix-blend-mode: difference;
   pointer-events: none;
@@ -144,7 +149,7 @@ img, svg, canvas { display: block; }
 .story {
   position: absolute;
   top: var(--story-anchor);
-  left: var(--story-left);
+  left: max(var(--story-left), var(--safe-left));
   width: min(560px, calc(50vw - var(--story-left) - 20px));
   display: flow-root;
   color: #29333c;
@@ -184,7 +189,7 @@ img, svg, canvas { display: block; }
 .inline-payload { display: inline-block; width: 2.8em; height: 1.65em; margin-inline: 0; object-fit: contain; vertical-align: -.43em; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 
-.site-footer { position: relative; z-index: 20; padding: 24px var(--gutter) 40px; color: #3d3732; background: var(--paper); --reveal: 1; }
+.site-footer { position: relative; z-index: 20; padding: 24px max(var(--gutter), var(--safe-right)) 40px max(var(--gutter), var(--safe-left)); color: #3d3732; background: var(--paper); --reveal: 1; }
 .site-footer::before {
   content: '';
   position: absolute;
@@ -267,7 +272,7 @@ img, svg, canvas { display: block; }
 }
 .footer-globe-portal:has(.footer-globe-trigger:focus-visible) iframe { --globe-hover-scale: 1.035; }
 .footer-globe-trigger:focus-visible { outline: 2px solid #778790; outline-offset: -8px; }
-.footer-globe-credit { position: absolute; right: 12px; bottom: 8px; display: flex; align-items: center; gap: 9px; font: 9px Helvetica,Arial,sans-serif; color: #808489; pointer-events: auto; }
+.footer-globe-credit { position: absolute; right: calc(12px + var(--safe-right)); bottom: 8px; display: flex; align-items: center; gap: 9px; font: 9px Helvetica,Arial,sans-serif; color: #808489; pointer-events: auto; }
 .footer-globe-credit img { width: 62px; height: auto; }
 .footer-globe-attribution summary { display: grid; place-items: center; width: 24px; height: 24px; cursor: pointer; list-style: none; }
 .footer-globe-attribution summary::-webkit-details-marker { display: none; }
