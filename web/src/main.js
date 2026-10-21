@@ -22,6 +22,57 @@ const cssScroll = typeof CSS !== 'undefined' && CSS.supports('animation-timeline
 const clamp = (value) => Math.max(0, Math.min(1, value));
 const phase = (value, start, end) => clamp((value - start) / (end - start));
 const smooth = (value) => value * value * (3 - 2 * value);
+
+// Edge strips (styles.css .edge) carry the color of the scene beside them, for Safari to extend behind its bars.
+const edgeTop = document.querySelector('.edge-top');
+const edgeBottom = document.querySelector('.edge-bottom');
+const PAPER = '#f6f4ef';
+// sky.webp's centre column (what a phone shows), top to bottom in tenths of the photo.
+const SKY_COLUMN = ['#98b2d6', '#a0b8d7', '#aabed8', '#b7c4d6', '#c2c9d4', '#cecdcf', '#d8cfc8', '#e2d0be', '#ebcfb2', '#eec8a4', '#deb89e']
+  .map((color, i) => [i / 10, color]);
+// city-mobile.webp's centre column: [fraction of the photo, colour, opacity]. Clear sky above the cloud bank,
+// then cloud, buildings from ~82%, and dark trees along the last 5%.
+const CITY_COLUMN = [[.575, '#e8d6c7', 0], [.6, '#e8d6c7', .02], [.625, '#e8d1bb', .31], [.65, '#edd6be', .66],
+  [.675, '#edd5bb', .98], [.7, '#ebd2b6', 1], [.725, '#e8ccb0', 1], [.75, '#e4c8ac', 1], [.775, '#e3c7ab', 1],
+  [.8, '#e2c6aa', 1], [.825, '#b39b89', 1], [.85, '#a0887a', 1], [.875, '#8d786f', 1], [.9, '#7e6b66', 1],
+  [.925, '#766561', 1], [.95, '#594e49', 1], [.975, '#463d3b', 1], [1, '#403835', 1]];
+// .scene-warmth's paper gradient: opacity by fraction of the scene's height.
+const WARMTH_GRADIENT = [[0, 0], [.3, 0], [.45, .08], [.6, .28], [.76, .6], [.88, .9], [.96, 1]];
+const rgb = (hex) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+const mix = (a, b, t) => a.map((value, i) => value + (b[i] - value) * t);
+function along(table, x, lerp) {
+  const next = table.findIndex(([at]) => at >= x);
+  if (next <= 0) return table[next === 0 ? 0 : table.length - 1][1];
+  const [[x0, a], [x1, b]] = [table[next - 1], table[next]];
+  return lerp(a, b, (x - x0) / (x1 - x0));
+}
+const numberAlong = (table, x) => along(table, x, (a, b, t) => a + (b - a) * t);
+const colorAlong = (table, x) => along(table.map(([at, hex]) => [at, rgb(hex)]), x, mix);
+const cityColor = (x) => colorAlong(CITY_COLUMN, x);
+const cityOpacity = (x) => numberAlong(CITY_COLUMN.map(([at, , opacity]) => [at, opacity]), x);
+const css = (color) => `rgb(${color.map(Math.round).join(' ')})`;
+
+function edgeColors(distance) {
+  const { height, duration, photoHeight, crop } = geometry;
+  const warmthOpacity = smooth(phase(distance, height * .4, height * .9));
+  const cityDrop = height * 1.12 * smooth(phase(distance, 0, height * .6));
+  const lift = Math.max(0, distance - duration); // how far the finished scene has scrolled up past the top edge
+  // The scene's colour at a viewport row: city over sky, under the warm veil; the footer once the scene has gone.
+  const sceneAt = (y) => {
+    const row = y + lift;
+    if (row >= height) return rgb(PAPER);
+    const cityRow = (row + crop - cityDrop) / photoHeight;
+    const scene = mix(colorAlong(SKY_COLUMN, (row + crop) / photoHeight), cityColor(cityRow), cityOpacity(cityRow));
+    return mix(scene, rgb(PAPER), warmthOpacity * numberAlong(WARMTH_GRADIENT, row / height));
+  };
+  // Safari's expanded toolbar hides the bottom of the 100lvh scene, so match the edge that is actually visible,
+  // averaged over the band the eye reads beside the toolbar rather than its last (darkest) row.
+  const bottom = Math.min(innerHeight, height);
+  const band = [0, 10, 20, 30, 40].map(offset => sceneAt(bottom - offset));
+  const average = band[0].map((_, i) => band.reduce((sum, color) => sum + color[i], 0) / band.length);
+  return { top: css(sceneAt(0)), bottom: css(average) };
+}
+
 let geometry;
 let frame;
 let firstReveal = true;
@@ -55,7 +106,7 @@ function measureScene() {
   const readingTravel = Math.max(0, anchor + farewell.offsetTop + farewell.offsetHeight - height + footerGap);
   const duration = readingStart + readingTravel;
 
-  geometry = { width, height, anchor, readingStart, readingTravel, duration, balloonShift, mobile,
+  geometry = { width, height, anchor, readingStart, readingTravel, duration, balloonShift, mobile, photoHeight, crop,
     cloudEdge: photoHeight * .52 - crop,
     cloudFeather: photoHeight * .08,
     storyLayout: storyItems.map((item) => ({ item, top: item.offsetTop, height: item.offsetHeight })),
@@ -98,6 +149,8 @@ function writeSceneProgram() {
 @keyframes sl-cloud { ${stops(24, x => { const edge = cloudEdge + height * 1.12 * smooth(x); return `--cloud-fade-start: ${px(edge)}; --cloud-fade-end: ${px(edge + cloudFeather)}`; })} }
 @keyframes sl-footer { ${stops(12, x => `opacity: ${smooth(x).toFixed(4)}; transform: translateY(${px(32 * (1 - smooth(x)))})`)} }
 @keyframes sl-header { ${stops(12, x => `transform: translateY(${px(-headerHeight * smooth(x))})`)} }
+@keyframes sl-edge-bottom { ${stops(96, x => `background-color: ${edgeColors((duration + footerHeight) * x).bottom}`)} }
+@keyframes sl-edge-top { ${stops(24, x => `background-color: ${edgeColors(duration + footerHeight * x).top}`)} }
 .foreground-layer { animation: sl-city linear both; ${timeline} ${range(0, cityEnd)} }
 .balloon-layer { animation: sl-balloon linear both; ${timeline} ${range(0, duration)} }
 .story { animation: sl-story linear both; ${timeline} ${range(readingStart, duration)} }
@@ -105,6 +158,8 @@ function writeSceneProgram() {
 .story-window { animation: sl-cloud linear both; ${timeline} ${range(0, cityEnd)} }
 .footer-row { animation: sl-footer linear both; ${timeline} animation-range: ${px(footerStart)} ${px(footerStart + Math.min(height * .5, footerHeight))}; }
 .site-header { animation: sl-header linear both; ${timeline} animation-range: ${px(footerStart)} ${px(footerStart + Math.min(height * .4, footerHeight))}; }
+.edge-bottom { animation: sl-edge-bottom linear both; ${timeline} ${range(0, duration + footerHeight)} }
+.edge-top { animation: sl-edge-top linear both; ${timeline} ${range(duration, duration + footerHeight)} }
 `;
 }
 
@@ -142,6 +197,9 @@ function updateScene() {
     const revealLine = Math.min(height * .82, viewportTop + Math.min(height, cloudEdge)) + Math.min(80, height * .1);
     const storyTop = geometry.anchor - Math.max(0, distance - readingStart);
 
+    const edges = edgeColors(distance);
+    setStyle(edgeTop, 'backgroundColor', edges.top);
+    setStyle(edgeBottom, 'backgroundColor', edges.bottom);
     setStyle(foreground, 'transform', `translate3d(0, ${cityDrop}px, 0)`);
     setStyle(balloon, 'transform', `translate3d(${right}px, ${-up}px, 0)`);
     setStyle(story, 'transform', `translate3d(0, ${-readingTravel * reading}px, 0)`);

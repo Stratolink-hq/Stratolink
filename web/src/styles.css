@@ -4,7 +4,7 @@
 :root {
   font-family: Helvetica, Arial, sans-serif;
   color: #fff;
-  background: #a8bbce;
+  background: #98b2d6;
   overscroll-behavior: none;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -19,6 +19,16 @@
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; line-height: 1.5; background: var(--paper); overscroll-behavior: none; }
 a { color: inherit; text-decoration: none; }
+/* Safari tints its status bar and toolbar from thin fixed strips at the viewport edges; it needs about 5px of each.
+   main.js keeps each strip the color of the scene beside it. Phones only, where the scene's edges are near-solid. */
+.edge { display: none; }
+@media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
+  .edge { display: block; position: fixed; left: 0; right: 0; z-index: 24; height: 12px; pointer-events: none; }
+  /* Safari reads the topmost fixed element at each edge: above the header and globe portal, under the open menu. */
+  .edge-top { top: -7px; z-index: 31; background: #98b2d6; }
+  .home-menu-open .edge-top { display: none; }
+  .edge-bottom { bottom: -7px; background: #403735; }
+}
 a:focus-visible { outline: 2px solid currentColor; outline-offset: 6px; }
 img, svg, canvas { display: block; }
 

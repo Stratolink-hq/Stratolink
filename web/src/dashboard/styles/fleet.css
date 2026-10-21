@@ -111,7 +111,15 @@
 .map-legend[data-expanded="true"] .map-legend-reveal { grid-template-rows: 1fr; opacity: 1; visibility: visible; }
 .map-legend-clip { min-height: 0; overflow: hidden; }
 .map-legend-body { width: 186px; padding: 2px 13px 13px; }
+.safari-edge { display: none; }
 @media (max-width: 767px) {
+  /* Safari tints its status bar and toolbar from the topmost fixed element at each edge (about 5px of it):
+     the header panel on top; the map below, or the charts drawer when a balloon is open. */
+  .safari-edge { display: block; position: fixed; left: 0; right: 0; z-index: 1000; height: 12px; pointer-events: none; }
+  .safari-edge-top { top: -7px; background: var(--t-panel); }
+  .safari-edge-bottom { bottom: -7px; background: var(--sl-bg); }
+  .fleet-app:has(.charts-drawer) .safari-edge-bottom { background: var(--sl-bg-1); }
+  html[data-globe-portal] .safari-edge { display: none; }
   .fleet-layout { display: flex; flex-direction: column; }
   .dashboard-panel { border-radius: 0 0 22px 22px; border-right: 0; border-bottom: 1px solid var(--t-border); box-shadow: 0 3px 12px rgb(24 29 36 / 5%); }
   .dashboard-map { margin-left: 0; }

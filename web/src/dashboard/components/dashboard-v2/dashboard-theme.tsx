@@ -5,6 +5,11 @@ export type DashboardTheme = 'light' | 'dark';
 
 const STORAGE_KEY = 'stratolink-dashboard-v2-theme';
 const SYSTEM_DARK = '(prefers-color-scheme: dark)';
+/** What a phone shows at each edge: the header panel on top, the map below. Safari colors its bars from these. */
+const EDGE_COLORS: Record<DashboardTheme, { top: string; bottom: string }> = {
+    light: { top: '#ffffff', bottom: '#ecedef' },
+    dark: { top: '#1c2027', bottom: '#16191e' },
+};
 
 /** Initial theme: an explicit saved choice wins; otherwise follow the OS
  *  setting (so dark-mode users land in dark mode by default). */
@@ -42,6 +47,15 @@ export function DashboardThemeProvider({ children }: { children: ReactNode }) {
         const timer = window.setTimeout(() => setEntryThemeReady(true), reduced ? 0 : 800);
         return () => window.clearTimeout(timer);
     }, [stage]);
+
+    useEffect(() => {
+        /* Inside the homepage's globe portal the document stays transparent (globe-portal.css). */
+        if (stage !== 'standalone') return;
+        const { top, bottom } = EDGE_COLORS[theme];
+        document.documentElement.style.backgroundColor = top;
+        document.body.style.backgroundColor = bottom;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', top);
+    }, [theme, stage]);
 
     useEffect(() => {
         /* Follow live OS changes — but only until the user picks a theme

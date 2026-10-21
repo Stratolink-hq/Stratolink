@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#a8bbce">
+  <meta name="theme-color" content="#98b2d6">
   <meta name="description" content="Open-source, solar-powered balloon payloads for collecting and sharing data from the stratosphere. Build your own, follow our flights, and join the network.">
   <title>Stratolink</title>
   <link rel="canonical" href="https://stratolink.org/">
@@ -32,6 +32,7 @@
   <noscript><style>
     html .launch { height: auto !important; }
     html .launch-viewport { position: relative; height: auto; min-height: 100lvh; }
+    html .edge { display: none; }
     html .story-window { position: relative; z-index: 6; mask-image: none; }
     html .story { position: relative; top: auto !important; transform: none !important; padding-top: 31lvh; padding-bottom: 64px; }
     html .essay-body > p, html .essay-body > section { opacity: 1; pointer-events: auto; }
@@ -40,6 +41,8 @@
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
+  <div class="edge edge-top" aria-hidden="true"></div>
+  <div class="edge edge-bottom" aria-hidden="true"></div>
   <div class="home-menu-backdrop" aria-hidden="true"></div>
   <header class="site-header">
     <a href="/" aria-label="Stratolink home"><img src="/assets/stratolink-wordmark.svg" alt="stratolink" width="7581" height="1510"></a>

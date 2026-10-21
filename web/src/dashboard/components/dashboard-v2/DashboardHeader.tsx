@@ -18,6 +18,13 @@ export default function DashboardHeader({ onBack }: { onBack?: (animate?: boolea
     const registrationOpen = community.panel === 'register';
     const [position, setPosition] = useState({ top: 64, right: 16 });
 
+    /* Safari holds its status bar and toolbar colours while a popover is open, so picking a theme closes the
+     * menu and the bars change with the page. */
+    const pickTheme = (next: typeof theme) => {
+        setTheme(next);
+        menu.current?.hidePopover();
+    };
+
     const positionMenu = useCallback(() => {
         const bounds = trigger.current?.getBoundingClientRect();
         if (bounds) setPosition({ top: bounds.bottom + 10, right: Math.max(12, window.innerWidth - bounds.right) });
@@ -98,12 +105,12 @@ export default function DashboardHeader({ onBack }: { onBack?: (animate?: boolea
                     <legend>Appearance</legend>
                     <div className="dashboard-theme-choices">
                         <label className="dashboard-theme-choice">
-                            <input type="radio" name={themeName} value="light" checked={theme === 'light'} onChange={() => setTheme('light')} />
+                            <input type="radio" name={themeName} value="light" checked={theme === 'light'} onChange={() => pickTheme('light')} />
                             <FontAwesomeIcon icon={faSun} aria-hidden />
                             Light
                         </label>
                         <label className="dashboard-theme-choice">
-                            <input type="radio" name={themeName} value="dark" checked={theme === 'dark'} onChange={() => setTheme('dark')} />
+                            <input type="radio" name={themeName} value="dark" checked={theme === 'dark'} onChange={() => pickTheme('dark')} />
                             <FontAwesomeIcon icon={faMoon} aria-hidden />
                             Dark
                         </label>

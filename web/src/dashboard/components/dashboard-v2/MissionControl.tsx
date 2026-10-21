@@ -356,6 +356,10 @@ export default function MissionControlScreen() {
 
     return (
         <div className="sl-app fleet-app" data-theme={theme}>
+            {!footerOnly && <>
+                <div className="safari-edge safari-edge-top" aria-hidden="true" />
+                <div className="safari-edge safari-edge-bottom" aria-hidden="true" />
+            </>}
             <main className="fleet-layout" data-detail={!isFleet} data-loading={registryLoading}>
                 {!footerOnly && <aside className="tlm-panel dashboard-panel fleet-panel">
                     <DashboardHeader onBack={isFleet ? undefined : showFleet} />
