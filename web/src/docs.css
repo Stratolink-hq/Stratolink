@@ -175,3 +175,8 @@
 .docs-code pre { max-height: 460px; }
 
 .docs-figure img[src="/assets/docs/dashboard-register.png"] { width: min(100%, 390px); margin-inline: auto; }
+
+.assembly-photo img { background: transparent; border: 0; max-height: 620px; object-fit: contain; }
+.assembly-drawing img { border: 0; background: transparent; padding: 0; }
+.assembly-pair { align-items: start; }
+@media (max-width: 600px) { .assembly-pair { grid-template-columns: 1fr; gap: 24px; } .assembly-pair .docs-image-open { height: auto; } .assembly-pair .docs-image-open img { max-height: 460px; } .assembly-drawing img { padding: 0; } }
