@@ -53,6 +53,12 @@ def tparse(s):
 
 # ── Config (mirror the app) ──────────────────────────────────────────────────
 HORIZON_H = 24
+# Hours of wind PAST the forecast horizon every cube carries. The recompute tier
+# (.github/workflows/forecast-recompute.yml) re-anchors the forecast on each new
+# GPS fix from these same cubes until the next scheduled ingest, up to one cron
+# interval (6 h) later, and a forecast started then still needs HORIZON_H of
+# wind ahead of it. Mirrors CUBE_EXTRA_H in lib/wind/forecastPlan.ts.
+CUBE_EXTRA_H = int(os.environ.get("FC_CUBE_EXTRA_H", "6"))
 MAX_GAP_H = 72
 # Two cubes per device (decoupled so the small forecast box can be fine without
 # the continent-wide reconstruction box dragging it coarse):
@@ -1358,7 +1364,7 @@ def build_static_fc(device, fixes, last_fix, gap_h, target_p, latest, now):
     fc_bounds = bounds_for_forecast(fc_fixes, pad_h, pad_cap=PAD_CAP_DEG)
     fc_step = choose_grid_step(fc_bounds)
     fc_start = floor_step(now - timedelta(hours=lookback_h), FC_STEP_H) - timedelta(hours=FC_STEP_H)
-    fc_end = floor_step(now, FC_STEP_H) + timedelta(hours=HORIZON_H + 2 * FC_STEP_H)
+    fc_end = floor_step(now, FC_STEP_H) + timedelta(hours=HORIZON_H + CUBE_EXTRA_H + 2 * FC_STEP_H)
     fc, fla, flo = sample_grids(fc_bounds, fc_step, fc_start, fc_end,
                                 FC_STEP_H, target_p, latest, now, "fcast")
     write_cube(device, "-fc", fc, fla, flo, "fcast")
@@ -1368,16 +1374,17 @@ def build_tube_fc(device, fixes, last_fix, gap_h, target_p, latest, now):
     """Forecast cube as a trajectory-following tube (P1). Time span: from
     FC_BIAS_H before the last fix (one bracketing slice of margin) through the
     dead-reckon (capped at DEAD_RECKON_CAP_H) and, if the gap is within the cap,
-    HORIZON_H of true forward forecast. Each hourly slice is a moderate box
-    centered on the pre-integrated nominal position (or the known track, before the
-    last fix)."""
+    HORIZON_H of true forward forecast plus CUBE_EXTRA_H so a per-fix recompute
+    before the next scheduled run still has a full horizon of wind. Each hourly
+    slice is a moderate box centered on the pre-integrated nominal position (or
+    the known track, before the last fix)."""
     last_fix_ms = int(last_fix.timestamp() * 1000)
     now_ms = int(now.timestamp() * 1000)
     step_ms = FC_STEP_H * 3600 * 1000
     cap_ms = DEAD_RECKON_CAP_H * 3600 * 1000
     reach_ms = min(now_ms, last_fix_ms + cap_ms)         # furthest the dead-reckon goes
     reached_now = reach_ms >= now_ms - step_ms
-    end_ms = reach_ms + (HORIZON_H * 3600 * 1000 if reached_now else 0)
+    end_ms = reach_ms + ((HORIZON_H + CUBE_EXTRA_H) * 3600 * 1000 if reached_now else 0)
     start_ms = (last_fix_ms // step_ms) * step_ms - FC_BIAS_H * 3600 * 1000
     n_slices = int(round((end_ms - start_ms) / step_ms)) + 1
     slice_ms = [start_ms + k * step_ms for k in range(n_slices)]
@@ -1395,7 +1402,7 @@ def build_tube_fc(device, fixes, last_fix, gap_h, target_p, latest, now):
     cov_h = (reach_ms - last_fix_ms) / 3.6e6
     print(f"    tube: {n_slices} slices @ {step}° ±{TUBE_HALF_DEG}°, "
           f"covers fix→+{cov_h:.0f}h (gap {gap_h:.0f}h{'' if reached_now else ', capped'})"
-          f"{' +' + str(HORIZON_H) + 'h fwd' if reached_now else ''}", flush=True)
+          f"{' +' + str(HORIZON_H + CUBE_EXTRA_H) + 'h fwd' if reached_now else ''}", flush=True)
     fc, fla, flo = sample_tube(centers, TUBE_HALF_DEG, step, slice_ms, target_p, latest, now, "tube")
     write_cube(device, "-fc", fc, fla, flo, "tube")
 

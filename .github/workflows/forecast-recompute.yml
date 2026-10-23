@@ -1,0 +1,66 @@
+name: Forecast recompute
+
+# Recompute tier: re-anchor ONE flying balloon's forecast on its newest GPS fix
+# from the cube set the last scheduled ingest (gfs-ingest.yml) published to
+# Blob. No Python, no GRIB, no NOAA download — only the ~2 s integration is
+# redone, so this can run for every fix (every ~20 min per balloon).
+#
+# Fired by the TTN webhook (web/server/forecastRecomputeTrigger.ts) as a
+# `repository_dispatch` of type `new-fix` with `{"device": "<id>"}`; GitHub only
+# runs repository_dispatch workflows from the DEFAULT branch. The manual
+# `workflow_dispatch` input exists for testing a branch.
+on:
+  repository_dispatch:
+    types: [new-fix]
+  workflow_dispatch:
+    inputs:
+      device:
+        description: 'Device to recompute (one id)'
+        required: true
+
+# One run per device at a time; a burst of fixes keeps only the newest.
+concurrency:
+  group: forecast-recompute-${{ inputs.device || github.event.client_payload.device }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  recompute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    env:
+      DEVICE: ${{ inputs.device || github.event.client_payload.device }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+      WIND_CUBE_DIR: .windcube/cubes
+      FORECAST_PLAN: .windcube/plan.json
+      FORECAST_MANIFEST: .windcube/manifest.json
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Check worker configuration
+        run: |
+          # shellcheck disable=SC2016  # ${key} is a JS template literal, not shell
+          node -e 'const id=process.env.DEVICE;if(!id||!/^[a-zA-Z0-9_-]{1,80}$/.test(id))throw new Error("A valid device id is required");for(const key of ["NEXT_PUBLIC_SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY","BLOB_READ_WRITE_TOKEN"])if(!process.env[key])throw new Error(`${key} is required`);'
+      # Skips (and says why) when the device is not flying, the stored forecast
+      # already starts from the newest fix, or the published cube set is missing
+      # or does not cover the fix; otherwise pulls the cubes onto the runner and
+      # writes the plan the compute step reads (lib/wind/forecastRecompute.ts).
+      - name: Prepare recompute
+        id: prepare
+        run: npm run forecast:recompute -- "$DEVICE"
+      - name: Compute and store forecast
+        if: steps.prepare.outputs.action == 'build'
+        run: npm run forecast:compute -- "$DEVICE"

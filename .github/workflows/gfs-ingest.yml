@@ -100,6 +100,22 @@ jobs:
       - name: Compute and store forecasts
         id: compute
         run: npm run forecast:compute -- "$DEVICE"
+      # Publish each built device's cube set (forecast tube, reconstruction cube,
+      # every member; ~2.5 MB per device) to Blob `cubes/{device}/…` so the
+      # recompute tier (forecast-recompute.yml) can re-anchor the forecast on new
+      # fixes until the next scheduled run without touching NOAA. Best-effort:
+      # the forecast above is already stored.
+      - name: Upload cube sets
+        id: upload
+        if: ${{ !cancelled() && steps.gfs.outcome == 'success' }}
+        continue-on-error: true
+        run: npm run forecast:upload-cubes -- "$DEVICE"
+      # Cube sets older than two days (balloons no longer built) and retired lock
+      # files; live sets are overwritten in place above.
+      - name: Purge stale Blob objects
+        if: ${{ !cancelled() && steps.upload.outcome == 'success' }}
+        continue-on-error: true
+        run: npm run forecast:blob-cleanup -- --apply
       # Member counts, step durations and skip reasons, from the plan + manifest.
       # Also decides `degraded` for the healthcheck ping below.
       - name: Job summary

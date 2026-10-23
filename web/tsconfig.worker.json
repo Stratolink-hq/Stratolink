@@ -30,6 +30,7 @@
     "scripts/compute_forecasts.ts",
     "scripts/forecast_local.ts",
     "scripts/inspect_cube.ts",
-    "scripts/plan_forecasts.ts"
+    "scripts/plan_forecasts.ts",
+    "scripts/recompute_forecast.ts"
   ]
 }

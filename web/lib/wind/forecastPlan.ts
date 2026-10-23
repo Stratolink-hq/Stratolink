@@ -19,6 +19,13 @@ export const PLAN_VERSION = 1;
 
 /** Mirrors HORIZON_H in scripts/gfs_ingest.py (and the compute's forecastHours). */
 export const HORIZON_H = 24;
+/**
+ * Mirrors CUBE_EXTRA_H in scripts/gfs_ingest.py: hours of wind past the horizon
+ * every cube carries so the recompute tier (lib/wind/forecastRecompute.ts) can
+ * re-anchor the forecast on new fixes until the next scheduled ingest, one cron
+ * interval (6 h) later.
+ */
+export const CUBE_EXTRA_H = 6;
 /** Mirrors DEAD_RECKON_CAP_H in scripts/gfs_ingest.py — the same env override. */
 export const DEFAULT_DEAD_RECKON_CAP_H = 14 * 24;
 /**
@@ -51,6 +58,13 @@ export type StoredForecastSummary = {
     generated_at: string;
     /** Time of the last GPS fix (or launch pseudo-fix) the stored forecast was built from. */
     last_fix_utc: string | null;
+    /**
+     * When the forecast cube it sampled was built (`metadata.wind_cube_generated_at`).
+     * The recompute tier refreshes `generated_at` on every new fix WITHOUT new
+     * cubes, so cube freshness — the thing a scheduled run can change — is judged
+     * by this, never by `generated_at`. Null for forecasts stored before the stamp.
+     */
+    cube_generated_at: string | null;
 };
 
 export type PlanDeviceInput = {
@@ -140,10 +154,13 @@ export function decideDevice(d: PlanDeviceInput, cfg: PlanConfig, nowMs = Date.n
     }
 
     /* Past the cap + margin: the tube is entirely past-cycle. Skip only when a
-     * stored forecast already captured exactly that — same origin fix, generated
-     * after every field it needs became immutable. */
+     * stored forecast already captured exactly that — same origin fix, sampled
+     * from CUBES built after every field they need became immutable. The cube
+     * stamp is what counts: a per-fix recompute re-stores the forecast with a new
+     * `generated_at` but the same old cubes, which must not freeze the device. */
     const frozenAtMs = originMs + finalAfterH * HOUR_MS;
     const storedMs = parseMs(d.stored?.generated_at);
+    const cubesMs = parseMs(d.stored?.cube_generated_at) ?? storedMs;
     const storedFixMs = parseMs(d.stored?.last_fix_utc);
     const sameOrigin = storedFixMs != null && Math.abs(storedFixMs - originMs) < 1000;
 
@@ -159,16 +176,18 @@ export function decideDevice(d: PlanDeviceInput, cfg: PlanConfig, nowMs = Date.n
             reason: `stored forecast starts from ${d.stored.last_fix_utc ?? 'an unknown fix'}, not ${originUtc}`,
         };
     }
-    if (storedMs < frozenAtMs) {
+    if (cubesMs == null || cubesMs < frozenAtMs) {
         return {
             ...base, ...origin, action: 'build',
-            reason: `stored forecast (${d.stored.generated_at}) predates the final capped dead-reckon`,
+            reason: d.stored.cube_generated_at
+                ? `stored forecast's cubes (${d.stored.cube_generated_at}) predate the final capped dead-reckon`
+                : `stored forecast (${d.stored.generated_at}) predates the final capped dead-reckon`,
         };
     }
     return {
         ...base, ...origin, action: 'skip',
         reason: `frozen: ${what} ${fmtH(ageH)} ago (> cap ${fmtH(cfg.deadReckonCapH)} + ${fmtH(cfg.freezeMarginH)}); `
-            + `stored forecast from ${d.stored.generated_at} is already the final dead-reckon`,
+            + `stored forecast from ${d.stored.generated_at} (cubes ${d.stored.cube_generated_at ?? 'unstamped'}) is already the final dead-reckon`,
     };
 }
 
@@ -178,11 +197,16 @@ export function storedForecastSummary(stored: {
     generated_at?: string;
     observed?: { gps_fixes?: Array<{ time_utc?: string }> };
     stale_gps?: { last_fix_time_utc?: string } | null;
+    metadata?: { wind_cube_generated_at?: string };
 } | null): StoredForecastSummary | null {
     if (!stored?.generated_at) return null;
     const fixes = stored.observed?.gps_fixes ?? [];
     const last = fixes.length ? fixes[fixes.length - 1]?.time_utc : undefined;
-    return { generated_at: stored.generated_at, last_fix_utc: last ?? stored.stale_gps?.last_fix_time_utc ?? null };
+    return {
+        generated_at: stored.generated_at,
+        last_fix_utc: last ?? stored.stale_gps?.last_fix_time_utc ?? null,
+        cube_generated_at: stored.metadata?.wind_cube_generated_at ?? null,
+    };
 }
 
 /** Plans older than this are ignored by every consumer (a stale local file must
