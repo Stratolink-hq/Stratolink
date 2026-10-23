@@ -26,8 +26,8 @@ been, entirely from **self-ingested NOAA wind data** (GFS, GEFS, AIGEFS). There 
   │ 3. scripts/compute_forecasts.ts   (tsx, WIND_CUBE_DIR=.windcube/cubes)         │
   │       buildForecastInputForDevice → computeMonteCarloForecast → storeForecast  │
   │                               → Vercel Blob  forecasts/{device}.json           │
-  │ 4. scripts/upload_cubes.mjs   the device's cube set (gzipped, ~2.5 MB)         │
-  │                               → Vercel Blob  cubes/{device}/{file}.slwc.gz     │
+  │ 4. scripts/upload_cubes.mjs   the device's cube set (gzipped, ~3 MB)           │
+  │                               → Vercel Blob  cubes/{device}/{set}/{file}.slwc.gz│
   │                                              cubes/{device}/manifest.json      │
   └──────────────────────────────────────────────────────────────────────────────┘
                                           │
@@ -229,11 +229,15 @@ GRIB2 complex packing needs eccodes from conda-forge). Per run:
 6. **Write** both cubes as packed binary `.slwc` into `.windcube/cubes/`
    (gitignored). The compute step reads them from disk; after it,
    `scripts/upload_cubes.mjs` publishes each built device's whole set (both GFS
-   cubes + every member, gzipped) to Blob `cubes/{device}/` with a
-   `manifest.json` (build time, forecast-cube span, member counts) for the
-   recompute tier (§5). Live sets are overwritten in place each run;
-   `blob_cleanup.mjs --apply` (the job's last step) purges sets older than
-   two days, i.e. balloons no longer built.
+   cubes + every member, gzipped) to Blob as a **versioned set**
+   `cubes/{device}/{set}/` (`set` = the build time), then writes
+   `cubes/{device}/manifest.json` naming that set, its files, the origin fix,
+   both cubes' time spans and member counts, for the recompute tier (§5). The
+   manifest is written last and names the files explicitly, so a reader never
+   sees a half-written set and a run that built fewer members never inherits
+   an older run's. The previous set is kept (a recompute may be mid-download),
+   older ones deleted; `blob_cleanup.mjs --apply` (the job's last step) also
+   purges anything older than two days, i.e. balloons no longer built.
 
 `gefs_ingest.py` then builds one tube cube per GEFS member (`gec00` + `gep01..30`,
 0.5° `pgrb2ap5`, 3-hourly, same level blending), and calls `aigefs_ingest.run()`
@@ -333,7 +337,7 @@ default `Stratolink-hq/Stratolink`). It is strictly off the response path:
 handed to Vercel's `waitUntil`, bounded by a 5 s timeout, every error logged
 and swallowed, and disabled entirely when the token is unset. Bursts (regional
 alias echoes, TTN retries) are debounced per device per function instance —
-the first packet dispatches at once, anything inside the next 20 s folds into
+the first packet dispatches at once, anything inside the next 5 s folds into
 one trailing dispatch — and the device's `flying` status is checked inside the
 background path, so the webhook never pays for it.
 
@@ -347,9 +351,14 @@ GRIB): ~1–2 min end to end.
    `lib/wind/forecastRecompute.ts`, pure + tested): skip unless the device is
    `flying` and connected, has a fix in its mission window, the stored
    forecast does **not** already start from that fix (`observed.gps_fixes`),
-   and the Blob cube set exists and its forecast cube spans both the fix and
-   "now". Otherwise it downloads `cubes/{device}/…` into `WIND_CUBE_DIR`
-   (gunzipped, the ingest's own filenames) and writes the plan + manifest
+   and the Blob cube set exists, is not older than the cubes the stored
+   forecast came from (a scheduled run stores its forecast before it uploads),
+   was laid out from a fix within `REANCHOR_MAX_GAP_H` (6 h) of the newest one
+   with a reconstruction cube that reaches it (a balloon back from a longer
+   silence waits for the next ingest, ≤ 6 h away), and its forecast cube spans
+   both the fix and "now". Otherwise it downloads the files the manifest names
+   from `cubes/{device}/{set}/` into `WIND_CUBE_DIR` (gunzipped, the ingest's
+   own filenames) and writes the plan + manifest
    files the compute step reads, with the member expectations from the set's
    manifest so a thin ensemble is still stamped `INCOMPLETE`. A skip is written
    to the plan as well, so the compute step reports it and exits clean.
@@ -421,8 +430,9 @@ next ingest.
   unless you run the worker or `forecast_local.ts` against local cubes.
 - **Frozen GPS** (`stratolink-3`): the device re-sends identical fixes. The
   clean-pair count and box-pad velocity both skip zero-displacement pairs.
-- **Blob `cubes/{device}/`** is live again (the recompute tier's input, §5),
-  overwritten by every scheduled run. Sets older than two days and the retired
+- **Blob `cubes/{device}/`** is live again (the recompute tier's input, §5):
+  one versioned set per scheduled run, the previous one kept. Sets older than
+  two days and the retired
   `forecasts/*.lock.json` are purged by the scheduled job's last step;
   `node --env-file=.env.local scripts/blob_cleanup.mjs` lists them, `--apply`
   deletes them by hand.
@@ -475,7 +485,7 @@ next ingest.
 | `.github/workflows/forecast-recompute.yml` | per-fix recompute from the Blob cube set (§5) |
 | `web/server/forecastRecomputeTrigger.ts` | webhook-side debounced `repository_dispatch` |
 | `web/scripts/recompute_forecast.ts`, `web/lib/wind/forecastRecompute.ts` | recompute prepare step + its skip rules |
-| `web/scripts/upload_cubes.mjs` | publish a device's cube set to Blob `cubes/{device}/` |
+| `web/scripts/upload_cubes.mjs` | publish a device's versioned cube set to Blob `cubes/{device}/{set}/` + manifest |
 | `web/scripts/gfs_ingest.py` | build the two GFS cubes from NOAA NODD |
 | `web/scripts/gefs_ingest.py`, `aigefs_ingest.py` | per-member GEFS / AIGEFS tube cubes |
 | `web/scripts/compute_forecasts.ts` | runner-side compute + store |

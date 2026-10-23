@@ -224,8 +224,11 @@ test('a recompute that re-stored the forecast from old cubes never freezes the d
 /* ── Recompute-tier rules (lib/wind/forecastRecompute.ts) ───────────────── */
 const { decideRecompute } = await tsImport('../lib/wind/forecastRecompute.ts', import.meta.url);
 
-const cubesFrom = (builtHoursAgo, { aheadH = 30 } = {}) => ({
+/* A set built `builtHoursAgo` from a fix at the same time: forecast cube from
+ * one hour before it to +aheadH, reconstruction cube to +6 h after it. */
+const cubesFrom = (builtHoursAgo, { aheadH = 30, originH = builtHoursAgo } = {}) => ({
   cube_generated_at: at(builtHoursAgo), t0Ms: now - (builtHoursAgo + 1) * H, tEndMs: now - builtHoursAgo * H + aheadH * H,
+  origin_fix_utc: at(originH), recon_end_ms: now - originH * H + 6 * H,
 });
 const recomputeInput = (over) => ({
   deviceId: 'd', status: 'flying', connected: true, newestFixUtc: at(0.3), nFixes: 40,
@@ -277,9 +280,31 @@ test('recompute skips when the cube set is missing, does not cover the fix, or e
   assert.match(before.reason, /does not cover the newest fix/);
   /* The set ran out: built 40 h ago with 30 h of wind, the fix inside it but
    * "now" past its end — the scheduled ingest is overdue. */
-  const stale = decideRecompute(recomputeInput({ newestFixUtc: at(12), stored: null, cubes: cubesFrom(40) }), now);
+  const stale = decideRecompute(recomputeInput({ newestFixUtc: at(12), stored: null, cubes: cubesFrom(40, { originH: 13 }) }), now);
   assert.equal(stale.action, 'skip');
   assert.match(stale.reason, /ends .* before now/);
+});
+
+test('recompute never trades newer cubes for older ones, and waits for the ingest after a long silence', () => {
+  /* The scheduled run stored its forecast (cubes built 0.2 h ago) and is still
+   * uploading; the manifest still names the previous set. */
+  const racing = decideRecompute(recomputeInput({ stored: { generated_at: at(0.1), last_fix_utc: at(3.2), cube_generated_at: at(0.2) }, cubes: cubesFrom(3.5) }), now);
+  assert.equal(racing.action, 'skip');
+  assert.match(racing.reason, /older than the stored forecast's cubes/);
+  /* A balloon back after 8 h of silence: the tubes were laid out from the old
+   * fix; neither the dead-reckon tube nor the reconstruction cube knows the new one. */
+  const back = decideRecompute(recomputeInput({ newestFixUtc: at(0.3), stored: null, cubes: cubesFrom(3.5, { originH: 8.5 }) }), now);
+  assert.equal(back.action, 'skip');
+  assert.match(back.reason, /8\.2 h past the fix the cubes were laid out from/);
+  /* Inside the 6 h bound but past the reconstruction cube's end (dark 5.9 h,
+   * recon ends +6 h after the origin — covered); a recon cube ending earlier is not. */
+  const covered = decideRecompute(recomputeInput({ newestFixUtc: at(0.3), stored: null, cubes: cubesFrom(3.5, { originH: 6.2 }) }), now);
+  assert.equal(covered.action, 'build');
+  const reconShort = decideRecompute(recomputeInput({ newestFixUtc: at(0.3), stored: null, cubes: { ...cubesFrom(3.5), recon_end_ms: now - 1 * H } }), now);
+  assert.equal(reconShort.action, 'skip');
+  assert.match(reconShort.reason, /reconstruction cube ends/);
+  /* Single-fix device (no reconstruction cube) and an unstamped origin still build. */
+  assert.equal(decideRecompute(recomputeInput({ stored: null, cubes: { ...cubesFrom(3.5), origin_fix_utc: null, recon_end_ms: null } }), now).action, 'build');
 });
 
 test('recompute prepare step rejects bad arguments and refuses to run without Blob', () => {

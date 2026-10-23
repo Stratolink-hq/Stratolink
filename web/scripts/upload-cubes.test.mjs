@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildCubeManifest, cubeBlobPath, cubeFilesFor, cubeManifestPath, devicesToUpload, readCubeHeader } from './upload_cubes.mjs';
+import { buildCubeManifest, cubeBlobPath, cubeFilesFor, cubeManifestPath, cubeSetId, devicesToUpload, readCubeHeader, setIdsFromKeys } from './upload_cubes.mjs';
 
 /** A `.slwc` with just a header (the upload step only parses the header). */
 function slwc(header) {
@@ -32,9 +32,17 @@ test('a device cube set is exactly its forecast, reconstruction and member cubes
   } finally { rmSync(dir, { recursive: true }); }
 });
 
-test('blob keys nest each set under cubes/{device}/ and the manifest sits beside it', () => {
-  assert.equal(cubeBlobPath('stratolink-1', 'stratolink-1-m03.slwc'), 'cubes/stratolink-1/stratolink-1-m03.slwc.gz');
+test('blob keys nest each versioned set under cubes/{device}/{set}/ with the manifest beside the sets', () => {
+  const header = { generated_at: '2026-10-23T20:36:45.240040+00:00' };
+  assert.equal(cubeSetId(header), '20261023T203645Z');
+  assert.equal(cubeSetId({}, new Date('2026-10-23T21:00:00Z')), '20261023T210000Z');
+  assert.equal(cubeBlobPath('stratolink-1', '20261023T203645Z', 'stratolink-1-m03.slwc'), 'cubes/stratolink-1/20261023T203645Z/stratolink-1-m03.slwc.gz');
   assert.equal(cubeManifestPath('stratolink-1'), 'cubes/stratolink-1/manifest.json');
+  /* Set ids come back newest first; the manifest and other devices are ignored. */
+  assert.deepEqual(setIdsFromKeys('s-1', [
+    'cubes/s-1/manifest.json', 'cubes/s-1/20261023T143000Z/s-1-fc.slwc.gz', 'cubes/s-1/20261023T203645Z/s-1-fc.slwc.gz',
+    'cubes/s-1/20261023T203645Z/s-1-m00.slwc.gz', 'cubes/s-10/20261023T203645Z/s-10-fc.slwc.gz',
+  ]), ['20261023T203645Z', '20261023T143000Z']);
 });
 
 test('the set manifest records the cube build time, the forecast span and member counts', () => {
@@ -43,7 +51,12 @@ test('the set manifest records the cube build time, the forecast span and member
   assert.deepEqual(readCubeHeader(slwc(header)), header);
   const files = ['d-fc.slwc', 'd.slwc', 'd-m00.slwc', 'd-m01.slwc', 'd-m02.slwc', 'd-a00.slwc'];
   const ingest = { sources: { gefs: { members_expected: 31, devices: { d: { expected: 3 } } }, aigefs: { members_expected: 31 } } };
-  const m = buildCubeManifest({ deviceId: 'd', header, files, ingest, planGeneratedAt: 'p', now: new Date('2026-10-23T17:45:00Z') });
+  const reconHeader = { v: 5, t0Ms: t0 - 6 * 3_600_000, stepMs: 3 * 3_600_000, nGrids: 5 };
+  const m = buildCubeManifest({ deviceId: 'd', setId: 'S', header, reconHeader, files, ingest, planGeneratedAt: 'p',
+    planDevice: { device_id: 'd', origin_utc: '2026-10-23T17:20:00Z' }, now: new Date('2026-10-23T17:45:00Z') });
+  assert.equal(m.set, 'S');
+  assert.equal(m.origin_utc, '2026-10-23T17:20:00Z');
+  assert.deepEqual(m.reconstruction_cube, { t0_utc: '2026-10-23T11:00:00.000Z', end_utc: '2026-10-23T23:00:00.000Z', step_h: 3, n_grids: 5, level_hpa: null });
   assert.equal(m.cube_generated_at, header.generated_at);
   assert.equal(m.uploaded_at, '2026-10-23T17:45:00.000Z');
   assert.equal(m.plan_generated_at, 'p');
@@ -52,5 +65,8 @@ test('the set manifest records the cube build time, the forecast span and member
   assert.deepEqual(m.members_expected, { gefs: 3, aigefs: 31 });
   assert.deepEqual(m.files, files);
   /* No ingest manifest (local run): no expectations, still a valid set. */
-  assert.deepEqual(buildCubeManifest({ deviceId: 'd', header, files, ingest: null }).members_expected, {});
+  const bare = buildCubeManifest({ deviceId: 'd', setId: 'S', header, files, ingest: null });
+  assert.deepEqual(bare.members_expected, {});
+  assert.equal(bare.origin_utc, null);
+  assert.equal(bare.reconstruction_cube, null);
 });

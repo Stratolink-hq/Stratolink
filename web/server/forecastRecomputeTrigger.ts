@@ -13,9 +13,9 @@
  * Debounce: a balloon's packet typically arrives several times within seconds
  * (regional alias echoes, TTN retries, duplicate deliveries), and every one of
  * them would otherwise start a run that the next one cancels. The first notify
- * for a device dispatches at once; further notifies inside DEBOUNCE_MS are
- * folded into ONE trailing dispatch at the end of the window (so a genuinely
- * newer fix in the burst still gets its run). The map is per function instance
+ * for a device dispatches at once; further notifies inside DEBOUNCE_MS (5 s)
+ * are folded into ONE trailing dispatch at the end of the window (so a
+ * genuinely newer fix in the burst still gets its run). The map is per function instance
  * — Vercel may run several — but the workflow's per-device concurrency group
  * (cancel-in-progress) and the recompute's own skip rules (the stored forecast
  * already starts from the newest fix) make an occasional extra dispatch a
@@ -25,7 +25,10 @@ import { createServerSupabase } from './supabaseServer.js';
 
 export const DISPATCH_EVENT = 'new-fix';
 export const DEFAULT_REPO = 'Stratolink-hq/Stratolink';
-export const DEBOUNCE_MS = 20_000;
+/** Short: it only has to swallow the echoes of ONE packet (seconds apart), and
+ *  the trailing dispatch must fire inside the function's execution budget
+ *  (legacy Node functions default to 10 s; `waitUntil` cannot extend it). */
+export const DEBOUNCE_MS = 5_000;
 const DISPATCH_TIMEOUT_MS = 5_000;
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const REPO = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*\/[A-Za-z0-9_-][A-Za-z0-9_.-]*$/;

@@ -6,7 +6,9 @@
  * Decides whether re-anchoring ONE device's forecast on its newest fix can do
  * anything (rules in lib/wind/forecastRecompute.ts), and when it can, pulls the
  * device's cube set that the last scheduled ingest published to Blob
- * (`cubes/{device}/…`, scripts/upload_cubes.mjs) into WIND_CUBE_DIR and writes
+ * (`cubes/{device}/manifest.json` → `cubes/{device}/{set}/…`,
+ * scripts/upload_cubes.mjs; only the files the manifest names, so a thinner
+ * run never inherits an older run's members) into WIND_CUBE_DIR and writes
  * the plan + manifest files that `npm run forecast:compute -- <device>` then
  * consumes exactly as it does after a scheduled ingest. A skip is written to the
  * plan too, so the compute step reports it and exits clean. Nothing here touches
@@ -18,7 +20,7 @@
  *      BLOB_READ_WRITE_TOKEN (required: the cubes and the stored forecast live there),
  *      WIND_CUBE_DIR (default .windcube/cubes), FORECAST_PLAN, FORECAST_MANIFEST.
  */
-import { get, list } from '@vercel/blob';
+import { get } from '@vercel/blob';
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
@@ -58,76 +60,82 @@ function cubeHeader(buf: Buffer): { t0Ms: number; stepMs: number; nGrids: number
     return JSON.parse(buf.subarray(4, 4 + len).toString('utf8'));
 }
 
-type CubeObject = { pathname: string; url: string; size: number };
+/** The set manifest scripts/upload_cubes.mjs writes last: which versioned set
+ *  is current and what it holds. */
+type CubeSetManifest = {
+    version?: number;
+    set?: string;
+    cube_generated_at?: string | null;
+    origin_utc?: string | null;
+    forecast_cube?: { t0_utc: string; end_utc: string } | null;
+    reconstruction_cube?: { t0_utc: string; end_utc: string } | null;
+    members_expected?: Record<string, number>;
+    files?: string[];
+};
 
-/** The device's published cube set: every object under `cubes/{device}/`. */
-async function listCubeSet(id: string): Promise<CubeObject[]> {
-    const prefix = `cubes/${encodeURIComponent(id)}/`;
-    const out: CubeObject[] = [];
-    let cursor: string | undefined;
-    do {
-        const page = await list({ prefix, cursor, limit: 1000 });
-        out.push(...page.blobs.map((b) => ({ pathname: b.pathname, url: b.url, size: b.size })));
-        cursor = page.hasMore ? page.cursor : undefined;
-    } while (cursor);
-    return out;
+async function getBlob(pathname: string): Promise<Buffer | null> {
+    const r = await get(pathname, { access: 'private', useCache: false });
+    if (!r) return null;   // absent
+    if (r.statusCode !== 200) throw new Error(`Blob get ${pathname} → ${r.statusCode}`);
+    return Buffer.from(await new Response(r.stream).arrayBuffer());
 }
 
-async function download(obj: CubeObject): Promise<Buffer> {
-    const r = await get(obj.pathname, { access: 'private', useCache: false });
-    if (!r || r.statusCode !== 200) throw new Error(`Blob get ${obj.pathname} → ${r?.statusCode ?? 'no response'}`);
-    const buf = Buffer.from(await new Response(r.stream).arrayBuffer());
-    return obj.pathname.endsWith('.gz') ? gunzipSync(buf) : buf;
+async function readCubeSetManifest(id: string): Promise<CubeSetManifest | null> {
+    const buf = await getBlob(`cubes/${encodeURIComponent(id)}/manifest.json`);
+    if (!buf) return null;
+    try {
+        const m = JSON.parse(buf.toString('utf8')) as CubeSetManifest;
+        return m && typeof m.set === 'string' && /^[A-Za-z0-9]+$/.test(m.set) && Array.isArray(m.files) ? m : null;
+    } catch { return null; }
 }
 
-/** Pull the set onto disk (gunzipped, the ingest's own filenames) and summarise
- *  it from the forecast cube's header. Null when there is no forecast cube. */
-async function fetchCubeSet(id: string, objects: CubeObject[], dry: boolean): Promise<CubeSetSummary | null> {
-    const prefix = `cubes/${encodeURIComponent(id)}/`;
-    const files = objects
-        .map((o) => ({ ...o, name: o.pathname.slice(prefix.length).replace(/\.gz$/, '') }))
-        .filter((o) => /\.(slwc|json)$/.test(o.name) && o.name !== 'manifest.json');
-    const fc = files.find((o) => o.name === `${encodeURIComponent(id)}-fc.slwc`);
+/** Pull the manifest's set onto disk (gunzipped, the ingest's own filenames)
+ *  and summarise it from the forecast cube's header. Null when the set has no
+ *  forecast cube. */
+async function fetchCubeSet(id: string, manifest: CubeSetManifest, dry: boolean): Promise<CubeSetSummary | null> {
+    const dir = `cubes/${encodeURIComponent(id)}/${manifest.set}/`;
+    const safe = /^[A-Za-z0-9_.-]+\.(slwc|json)$/;
+    const files = (manifest.files ?? []).filter((f) => safe.test(f) && f.startsWith(encodeURIComponent(id)));
+    const fc = files.find((f) => f === `${encodeURIComponent(id)}-fc.slwc`);
     if (!fc) return null;
     const t0 = Date.now();
     if (!dry) mkdirSync(CUBE_DIR, { recursive: true });
-    let header: ReturnType<typeof cubeHeader> | null = null;
+    const fetchFile = async (name: string): Promise<Buffer> => {
+        const buf = await getBlob(`${dir}${name}.gz`);
+        if (!buf) throw new Error(`cube ${dir}${name}.gz named by the manifest is missing`);
+        return gunzipSync(buf);
+    };
     let bytes = 0;
     /* The forecast cube first (its header is the decision), then the rest a few at a time. */
-    const fcBuf = await download(fc);
-    header = cubeHeader(fcBuf);
+    const fcBuf = await fetchFile(fc);
+    const header = cubeHeader(fcBuf);
     bytes += fcBuf.length;
-    if (!dry) writeFileSync(join(CUBE_DIR, fc.name), fcBuf);
-    const queue = files.filter((o) => o !== fc);
+    if (!dry) writeFileSync(join(CUBE_DIR, fc), fcBuf);
+    const queue = files.filter((f) => f !== fc);
     const worker = async () => {
-        for (let o = queue.shift(); o; o = queue.shift()) {
-            const buf = await download(o);
+        for (let f = queue.shift(); f; f = queue.shift()) {
+            const buf = await fetchFile(f);
             bytes += buf.length;
-            if (!dry) writeFileSync(join(CUBE_DIR, o.name), buf);
+            if (!dry) writeFileSync(join(CUBE_DIR, f), buf);
         }
     };
     if (!dry) await Promise.all(Array.from({ length: 6 }, worker));
-    const members = files.filter((o) => /-[ma]\d+\.slwc$/.test(o.name)).length;
+    const members = files.filter((f) => /-[ma]\d+\.slwc$/.test(f)).length;
     console.log(
-        `  ${id}: cube set ${files.length} file(s) (${members} members), ${Math.round(bytes / 1024)} KB` +
+        `  ${id}: cube set ${manifest.set}, ${files.length} file(s) (${members} members), ${Math.round(bytes / 1024)} KB` +
         `${dry ? ' (dry: only the forecast cube read)' : ` → ${CUBE_DIR}`} in ${((Date.now() - t0) / 1000).toFixed(1)} s`,
     );
+    const reconEnd = manifest.reconstruction_cube?.end_utc ? Date.parse(manifest.reconstruction_cube.end_utc) : NaN;
     return {
-        cube_generated_at: header.generated_at ?? null,
+        cube_generated_at: header.generated_at ?? manifest.cube_generated_at ?? null,
         t0Ms: header.t0Ms,
         tEndMs: header.t0Ms + Math.max(0, header.nGrids - 1) * header.stepMs,
+        origin_fix_utc: manifest.origin_utc ?? null,
+        recon_end_ms: Number.isFinite(reconEnd) ? reconEnd : null,
     };
 }
 
-/** Member expectations for the compute's `members_expected` stamp, from the
- *  set's manifest (written by upload_cubes.mjs from the ingest manifest). */
-async function cubeSetManifest(id: string, objects: CubeObject[]): Promise<Record<string, unknown> | null> {
-    const m = objects.find((o) => o.pathname === `cubes/${encodeURIComponent(id)}/manifest.json`);
-    if (!m) return null;
-    try { return JSON.parse((await download(m)).toString('utf8')); } catch { return null; }
-}
-
-function writePlanFiles(decision: RecomputeDecision, device: DeviceRow | null, nFixes: number, setManifest: Record<string, unknown> | null, nowMs: number): void {
+function writePlanFiles(decision: RecomputeDecision, device: DeviceRow | null, nFixes: number, setManifest: CubeSetManifest | null, nowMs: number): void {
     const cfg = planConfigFromEnv();
     const plan: ForecastPlan = {
         version: PLAN_VERSION,
@@ -151,7 +159,7 @@ function writePlanFiles(decision: RecomputeDecision, device: DeviceRow | null, n
     /* The manifest carries the member counts the scheduled ingest was configured
      * for, so a thin set is still stamped INCOMPLETE in the recomputed forecast. */
     const manifest: ForecastManifest = emptyManifest(plan.generated_at);
-    const expected = (setManifest?.members_expected ?? {}) as Record<string, number>;
+    const expected: Record<string, number> = setManifest?.members_expected ?? {};
     for (const src of ['gefs', 'aigefs']) {
         if (typeof expected[src] === 'number') {
             manifest.sources[src] = { members_expected: expected[src], devices: { [decision.device_id]: { expected: expected[src] } } };
@@ -181,8 +189,7 @@ async function main(): Promise<void> {
     let nFixes = 0;
     let stored: StoredForecastSummary | null = null;
     let cubes: CubeSetSummary | null = null;
-    let objects: CubeObject[] = [];
-    let setManifest: Record<string, unknown> | null = null;
+    let setManifest: CubeSetManifest | null = null;
 
     /* Cheap checks first; the cube download only when everything else says build. */
     if (device?.status === 'flying' && connected) {
@@ -196,11 +203,11 @@ async function main(): Promise<void> {
             newestFixUtc = launchOnly ? null : last?.time_utc ?? null;
         }
         stored = storedForecastSummary(await readStoredForecast(id));
-        const early = decideRecompute({ deviceId: id, status: device.status, connected, newestFixUtc, nFixes, stored, cubes: { cube_generated_at: null, t0Ms: -Infinity, tEndMs: Infinity } }, nowMs);
+        const anyCubes = { cube_generated_at: null, t0Ms: -Infinity, tEndMs: Infinity, origin_fix_utc: null, recon_end_ms: null };
+        const early = decideRecompute({ deviceId: id, status: device.status, connected, newestFixUtc, nFixes, stored, cubes: anyCubes }, nowMs);
         if (early.action === 'build') {
-            objects = await listCubeSet(id);
-            cubes = await fetchCubeSet(id, objects, dry);
-            setManifest = await cubeSetManifest(id, objects);
+            setManifest = await readCubeSetManifest(id);
+            if (setManifest) cubes = await fetchCubeSet(id, setManifest, dry);
         }
     }
 

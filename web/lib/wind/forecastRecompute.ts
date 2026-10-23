@@ -23,7 +23,20 @@ export type CubeSetSummary = {
     /** Time span of the forecast cube: first and last slice, epoch ms. */
     t0Ms: number;
     tEndMs: number;
+    /** The fix the tubes were laid out from (the plan's `origin_utc` at ingest time). */
+    origin_fix_utc: string | null;
+    /** Last slice of the reconstruction cube, epoch ms (null: single-fix device, no recon cube). */
+    recon_end_ms: number | null;
 };
+
+/**
+ * How far past the fix the cubes were laid out from a newer fix may be and
+ * still be re-anchored on. The forecast tube follows the dead-reckon from that
+ * fix and the reconstruction cube ends two 3-h steps after it, so a balloon
+ * that reappears after a longer silence sits outside both; its forecast waits
+ * for the next scheduled ingest (≤ 6 h away, the same bound).
+ */
+export const REANCHOR_MAX_GAP_H = 6;
 
 export type RecomputeInput = {
     deviceId: string;
@@ -59,8 +72,11 @@ const fmtH = (h: number) => (h >= 48 ? `${(h / 24).toFixed(1)} d` : `${h.toFixed
 /**
  * Decide one device. In order: the device must be flying and connected, have a
  * fix to start from, the stored forecast must not already start from that fix,
- * and the cube set must exist and span the fix and "now" (the forecast
- * integrates forward from now; a cube that ends before it has no wind to give).
+ * and the cube set must exist, be no older than the cubes the stored forecast
+ * came from, have been laid out from a fix within REANCHOR_MAX_GAP_H of the
+ * newest one (and its reconstruction cube must reach it), and span the fix and
+ * "now" (the forecast integrates forward from now; a cube that ends before it
+ * has no wind to give).
  * A cube that ends before now + HORIZON_H still builds — the compute truncates
  * honestly (`coverage_limited`) and the next scheduled run restores the horizon.
  */
@@ -86,6 +102,30 @@ export function decideRecompute(d: RecomputeInput, nowMs = Date.now()): Recomput
 
     if (!d.cubes) return { ...base, action: 'skip', reason: 'no cube set in Blob (the scheduled ingest has not published one)' };
     const fmt = (ms: number) => new Date(ms).toISOString();
+    /* Never trade a forecast built from newer cubes for one from older cubes: a
+     * scheduled run stores its forecast before it publishes its set, and a
+     * recompute landing in that window would otherwise undo it. */
+    const cubesBuiltMs = parseMs(d.cubes.cube_generated_at);
+    const storedCubesMs = parseMs(d.stored?.cube_generated_at);
+    if (cubesBuiltMs != null && storedCubesMs != null && cubesBuiltMs < storedCubesMs) {
+        return {
+            ...base, action: 'skip',
+            reason: `cube set (built ${d.cubes.cube_generated_at}) is older than the stored forecast's cubes (${d.stored?.cube_generated_at}) — the scheduled run is ahead`,
+        };
+    }
+    const originMs = parseMs(d.cubes.origin_fix_utc);
+    if (originMs != null && fixMs - originMs > REANCHOR_MAX_GAP_H * HOUR_MS) {
+        return {
+            ...base, action: 'skip',
+            reason: `newest fix is ${fmtH((fixMs - originMs) / HOUR_MS)} past the fix the cubes were laid out from (${d.cubes.origin_fix_utc}) — wait for the scheduled ingest`,
+        };
+    }
+    if (d.cubes.recon_end_ms != null && fixMs > d.cubes.recon_end_ms) {
+        return {
+            ...base, action: 'skip',
+            reason: `reconstruction cube ends ${fmt(d.cubes.recon_end_ms)}, before the newest fix ${d.newestFixUtc} — wait for the scheduled ingest`,
+        };
+    }
     if (fixMs < d.cubes.t0Ms || fixMs > d.cubes.tEndMs) {
         return {
             ...base, action: 'skip',
