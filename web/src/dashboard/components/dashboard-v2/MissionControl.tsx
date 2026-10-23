@@ -50,6 +50,8 @@ import { reconstructedFlightTrack } from '@/lib/telemetry/reconstructedTrack';
 import { receivingStations } from '@/lib/telemetry/fleetPlayback';
 
 const V2MissionMap = lazy(() => import('./V2MissionMap'));
+/* Last fix older than this = GPS dark; matches the worker's STALE_GPS_THRESHOLD_H. */
+const GPS_DARK_MS = 3_600_000;
 
 interface FlightSummary {
     /** Span from first to last loaded packet, ms. Null when no data. */
@@ -184,14 +186,37 @@ export default function MissionControlScreen() {
         if (scrubT! < t0) setScrubT(t0);
     }, [visibleRows, scrubT, followLive]);
 
+    /* Ticking wall-clock for "time to present" and the live position estimate.
+     * null on server + first client render (SSR-safe), then live; refreshed each minute. */
+    const [nowMs, setNowMs] = useState<number | null>(null);
+    useEffect(() => {
+        setNowMs(Date.now());
+        const id = setInterval(() => setNowMs(Date.now()), 60_000);
+        return () => clearInterval(id);
+    }, []);
+
     /* "Now" boundary = the latest packet (observed↔forecast divide). */
     const packetEndT = visibleRows.length ? visibleRows[visibleRows.length - 1].t : null;
-    /* When GPS is stale, "now" is the dead-reckoned forecast origin — well past the
-     * last packet — so live should show the balloon's ESTIMATED current position
-     * there, not the last fix. When GPS is fresh the last packet IS now, so we leave
-     * the live cursor exactly where it was (no behavior change for live balloons). */
-    const liveOriginT = !archived && forecast.staleGps ? forecast.originT : null;
-    const effectiveScrubT: number | null = followLive ? (liveOriginT ?? packetEndT) : scrubT;
+    /* When GPS is dark, live shows the balloon's ESTIMATED current position, not
+     * the last fix: the real clock, carried along the forecast from its origin (the
+     * stored forecast's "now" when it was computed) and parked at its end, where the
+     * ensemble stopped agreeing. GPS counts as dark when the stored forecast says so,
+     * or once the last fix is older than the worker's own threshold (an hour), since
+     * a forecast computed while GPS was fresh doesn't know the balloon went quiet.
+     * Only a forecast that already knows the latest fix is followed; an older one
+     * would pull the marker back to a superseded estimate. Before the clock mounts it
+     * sits at the origin. When GPS is fresh the last packet IS now, so we leave the
+     * live cursor exactly where it was (no behavior change for live balloons). */
+    const lastFixT = useMemo(() => {
+        for (let i = visibleRows.length - 1; i >= 0; i--) if (visibleRows[i].lat != null && visibleRows[i].lon != null) return visibleRows[i].t;
+        return null;
+    }, [visibleRows]);
+    const originT = forecast.originT;
+    const gpsDark = forecast.staleGps || (nowMs !== null && lastFixT !== null && nowMs - lastFixT >= GPS_DARK_MS);
+    const liveEstimateT = !archived && gpsDark && originT !== null && (lastFixT === null || originT >= lastFixT)
+        ? Math.max(originT, Math.min(nowMs ?? originT, forecast.endT ?? originT))
+        : null;
+    const effectiveScrubT: number | null = followLive ? (liveEstimateT ?? packetEndT) : scrubT;
     /* In the future leg the charts hold the last real reading. */
     const isFuture = effectiveScrubT !== null && packetEndT !== null && effectiveScrubT > packetEndT;
 
@@ -231,15 +256,6 @@ export default function MissionControlScreen() {
                 : base.latestFix,
         };
     }, [selectedId, devices, rows]);
-
-    /* Ticking wall-clock for "time to present". null on server + first client
-     * render (SSR-safe), then live; refreshed each minute. */
-    const [nowMs, setNowMs] = useState<number | null>(null);
-    useEffect(() => {
-        setNowMs(Date.now());
-        const id = setInterval(() => setNowMs(Date.now()), 60_000);
-        return () => clearInterval(id);
-    }, []);
 
     /* Launch moment derived from the telemetry itself (first decisive climb),
      * NOT devices.launched_at — a payload can soak on the bench for days
@@ -410,7 +426,7 @@ export default function MissionControlScreen() {
                             archived={isFleet ? fleetRecorded : archived}
                             onScrubbingChange={setIsScrubbing}
                             futureEndT={isFleet ? null : forecast.endT}
-                            originT={isFleet ? null : liveOriginT}
+                            originT={isFleet ? null : liveEstimateT}
                             floating
                         />
                     </div>}
