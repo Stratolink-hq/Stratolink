@@ -231,14 +231,18 @@ export function LineTrend({
     unit: string;
     height?: number;
     emphasis?: 'normal' | 'low';
-    /** When set, a dot tracks this scrub time along the line. */
+    /** When set, a marker sits at this scrub time on the line. */
     scrubT?: number | null;
     /** When set, clicking or dragging along the chart scrubs to that time. */
     onPickTime?: (t: number) => void;
     /** True while a drag on the chart is driving the scrub time. */
     onScrubbingChange?: (active: boolean) => void;
 }) {
+    /** Hover cursor x, in viewBox units. */
     const [hover, setHover] = useState<number | null>(null);
+    /* While a drag scrubs, the scrub marker itself follows the pointer and
+     * the hover cursor stands down — one marker, not two. */
+    const [scrubbing, setScrubbing] = useState(false);
     /* The pointer pressed on the chart. A mouse scrubs from the press; a touch
      * stays inactive until it moves sideways, so a vertical swipe still scrolls. */
     const dragRef = useRef<{ id: number; x0: number; y0: number; active: boolean } | null>(null);
@@ -262,19 +266,8 @@ export function LineTrend({
 
     /* Time-warped axis (gaps detected, compressed, broken) — shared with the
      * other timeline charts. */
-    const { pts, segments, X, gapMarks, timeAtX } = useMemo(() => buildWarpedAxis(times, W, 90), [times]);
-
-    /* Downsampled index whose source time is closest to the scrub time. */
-    const scrubIdx = useMemo(() => {
-        if (scrubT == null) return null;
-        let best = 0;
-        let bestD = Infinity;
-        for (let i = 0; i < pts.length; i++) {
-            const d = Math.abs(times[pts[i].src] - scrubT);
-            if (d < bestD) { bestD = d; best = i; }
-        }
-        return best;
-    }, [scrubT, pts, times]);
+    const { pts, segments, X, warpX, gapMarks, timeAtX } = useMemo(() => buildWarpedAxis(times, W, 90), [times]);
+    const segmentStarts = useMemo(() => new Set(segments.map((seg) => seg[0])), [segments]);
 
     /* Below all hooks: the sample count can cross 2 as telemetry streams in,
      * and an earlier return would change the hook count between renders. */
@@ -314,12 +307,38 @@ export function LineTrend({
     const faint = emphasis === 'low';
     const lineCol = faint ? 'var(--t-text-4)' : 'var(--t-text-3)';
 
-    /* Scrub to the time under the pointer: the cursor snaps to the nearest
-     * plotted sample, while the picked time glides continuously between them. */
-    const scrubTo = (clientX: number, el: Element) => {
+    const last = pts.length - 1;
+    /* Height of the drawn line at viewBox x: interpolated along a segment,
+     * snapped to the nearer end across a gap (where no line is drawn). */
+    const lineYAt = (x: number) => {
+        let i = 1;
+        while (i < last && X(i) < x) i++;
+        const x0 = X(i - 1);
+        const x1 = X(i);
+        const f = x1 > x0 ? Math.max(0, Math.min(1, (x - x0) / (x1 - x0))) : 1;
+        if (segmentStarts.has(i)) return Y(valAt(f < 0.5 ? i - 1 : i));
+        return Y(valAt(i - 1) + (valAt(i) - valAt(i - 1)) * f);
+    };
+    /* Plotted sample nearest viewBox x — what the tooltip reads out. */
+    const idxNear = (x: number) => {
+        let best = 0;
+        for (let i = 1; i <= last; i++) if (Math.abs(X(i) - x) < Math.abs(X(best) - x)) best = i;
+        return best;
+    };
+    /* The scrub marker sits at the scrub time itself, not snapped to a sample
+     * or packet, so a drag moves it exactly with the pointer. */
+    const markerX = scrubT != null ? Math.max(X(0), Math.min(X(last), warpX(scrubT))) : null;
+    /* While scrubbing, the readout rides the marker; otherwise the hover cursor. */
+    const tipX = scrubbing ? markerX : hover;
+    const tipIdx = tipX != null ? idxNear(tipX) : null;
+
+    const xOf = (clientX: number, el: Element) => {
         const rect = el.getBoundingClientRect();
-        setHover(nearestIdxAt(clientX, rect, pts.length, X, W));
-        const t = timeAtX(((clientX - rect.left) / rect.width) * W);
+        return Math.max(0, Math.min(W, ((clientX - rect.left) / rect.width) * W));
+    };
+    /* Scrub to the time under the pointer — continuous between samples. */
+    const scrubTo = (clientX: number, el: Element) => {
+        const t = timeAtX(xOf(clientX, el));
         if (Number.isFinite(t)) onPickTime?.(t);
     };
     const beginScrub = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -327,6 +346,8 @@ export function LineTrend({
         dragRef.current.active = true;
         /* Keep the drag once the pointer strays off the chart. */
         e.currentTarget.setPointerCapture(e.pointerId);
+        setScrubbing(true);
+        setHover(null);
         onScrubbingChange?.(true);
         scrubTo(e.clientX, e.currentTarget);
     };
@@ -334,7 +355,10 @@ export function LineTrend({
         const drag = dragRef.current;
         if (drag?.id !== pointerId) return null;
         dragRef.current = null;
-        if (drag.active) onScrubbingChange?.(false);
+        if (drag.active) {
+            setScrubbing(false);
+            onScrubbingChange?.(false);
+        }
         return drag;
     };
 
@@ -365,8 +389,7 @@ export function LineTrend({
                         }
                         return;
                     }
-                    /* Plain hover: map the cursor to the sample nearest it. */
-                    if (e.pointerType === 'mouse') setHover(nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect(), pts.length, X, W));
+                    if (e.pointerType === 'mouse') setHover(xOf(e.clientX, e.currentTarget));
                 }}
                 onPointerUp={(e) => {
                     const drag = endScrub(e.pointerId);
@@ -407,26 +430,26 @@ export function LineTrend({
                     strokeLinejoin="round"
                     strokeLinecap="round"
                 />
-                {scrubIdx != null && (
-                    <line x1={X(scrubIdx)} y1={0} x2={X(scrubIdx)} y2={H} stroke="var(--t-accent)" strokeWidth="0.75" opacity="0.4" />
+                {markerX != null && (
+                    <line x1={markerX} y1={0} x2={markerX} y2={H} stroke="var(--t-accent)" strokeWidth="0.75" opacity={scrubbing ? 0.6 : 0.4} />
                 )}
-                {hover != null && <line x1={X(hover)} y1={0} x2={X(hover)} y2={H} stroke="var(--t-accent)" strokeWidth="0.75" opacity="0.5" />}
+                {hover != null && <line x1={hover} y1={0} x2={hover} y2={H} stroke="var(--t-accent)" strokeWidth="0.75" opacity="0.5" />}
             </svg>
-            {scrubIdx != null && <OverlayDot x={X(scrubIdx) / W} y={Y(valAt(scrubIdx)) / H} />}
-            {hover != null && <OverlayDot x={X(hover) / W} y={Y(valAt(hover)) / H} size={5} ring={false} />}
+            {markerX != null && <OverlayDot x={markerX / W} y={lineYAt(markerX) / H} />}
+            {hover != null && <OverlayDot x={hover / W} y={lineYAt(hover) / H} size={5} ring={false} />}
             <div style={boundLbl('top', fmtFn(dataMax))}>{fmtFn(dataMax)}</div>
             <div style={boundLbl('bottom', fmtFn(dataMin))}>{fmtFn(dataMin)}</div>
-            {hover != null && pts[hover] && (
+            {tipX != null && tipIdx != null && (
                 <Tip
-                    xFrac={X(hover) / W}
+                    xFrac={tipX / W}
                     lines={
                         <>
                             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                                {fmtFn(valAt(hover))}
+                                {fmtFn(valAt(tipIdx))}
                                 <span style={{ opacity: 0.6, marginLeft: 3 }}>{unit}</span>
                             </div>
                             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em', opacity: 0.6, marginTop: 1 }}>
-                                {stamp(times[pts[hover].src])}
+                                {stamp(times[pts[tipIdx].src])}
                             </div>
                         </>
                     }

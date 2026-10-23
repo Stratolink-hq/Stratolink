@@ -351,7 +351,7 @@ export default function MissionControlScreen() {
     }
 
     const panelProps = {
-        device: displayDevice, devices, onSelect: handleSelectDevice, scrubRow,
+        device: displayDevice, devices, onSelect: handleSelectDevice, scrubRow, scrubT: effectiveScrubT,
         summary: flightSummary, rows, isFuture: noReading, recordedHistory: archived, onPickTime: pickTime,
         onScrubbingChange: setIsScrubbing,
     };

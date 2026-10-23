@@ -49,6 +49,9 @@ export type TelemetryV3PanelProps = {
     devices: DeviceSummary[];
     onSelect: (id: string) => void;
     scrubRow: TelemetryRow | null;
+    /** The scrub time itself (scrubRow is the packet at or before it) — the
+     *  chart markers sit here so a drag moves them with the pointer. */
+    scrubT?: number | null;
     summary: FlightSummary;
     rows: TelemetryRow[];
     /** True when there's no live reading at the cursor — out in the forecast,
@@ -185,7 +188,7 @@ function TiltIcon({ deg, color }: { deg: number; color: string }) {
     );
 }
 
-export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, summary, rows, isFuture = false, recordedHistory = false, variant = 'full', onPickTime, onScrubbingChange }: TelemetryV3PanelProps) {
+export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, scrubT = null, summary, rows, isFuture = false, recordedHistory = false, variant = 'full', onPickTime, onScrubbingChange }: TelemetryV3PanelProps) {
     const showHeader = variant !== 'charts';
     const showBody = variant !== 'summary';
     /* The mobile summary header is tightened vertically — it's the only thing
@@ -338,7 +341,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                         fmtFn={(v) => tlmFmt.int(v)}
                         unit="m"
                         height={58}
-                        scrubT={scrubRow?.t ?? null}
+                        scrubT={scrubT ?? scrubRow?.t ?? null}
                         onPickTime={onPickTime}
                         onScrubbingChange={onScrubbingChange}
                     />
@@ -359,7 +362,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                             {chart.value != null && chart.unit && <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-3)', marginLeft: 3 }}>{chart.unit}</span>}
                         </span>
                     </div>
-                    <LineTrend key={chartKey} series={chart.series} times={flight.times} status="nominal" fmtFn={chart.fmtFn} unit={chart.unit} height={44} scrubT={scrubRow?.t ?? null} onPickTime={onPickTime} onScrubbingChange={onScrubbingChange} />
+                    <LineTrend key={chartKey} series={chart.series} times={flight.times} status="nominal" fmtFn={chart.fmtFn} unit={chart.unit} height={44} scrubT={scrubT ?? scrubRow?.t ?? null} onPickTime={onPickTime} onScrubbingChange={onScrubbingChange} />
                 </div>
             </Group>
 
