@@ -258,27 +258,26 @@ export default function MissionControlScreen() {
      * ping), so it keeps counting while the balloon is aloft — and stays '-'
      * until the balloon actually climbs. Distance is the length of the
      * hindcast line — the wind-reconstructed path through GPS gaps — which is
-     * more realistic than straight-line hops between sparse fixes. Falls back
-     * to the GPS-fix sum if no hindcast. */
+     * more realistic than straight-line hops between sparse fixes, continued
+     * through the fixes reported since the forecast was built (the stored line
+     * ends at the fix the last run started from). Falls back to the GPS-fix
+     * sum if no hindcast. */
     const flightSummary: FlightSummary = useMemo(() => {
         if (rows.length === 0 || launchT === null) return { durationMs: null, distanceKm: 0 };
         /* Until the clock mounts, fall back to the last packet (deterministic). */
         const endT = archived ? rows[rows.length - 1].t : (nowMs ?? rows[rows.length - 1].t);
         const durationMs = Math.max(0, endT - launchT);
+        const fixes = flightTrack(rows.filter(r => r.t >= launchT)).map(p => ({ lon: p.lon, lat: p.lat, t: p.t }));
+        const timed = forecast.hindcastTrack.map(p => ({ lon: p.lon, lat: p.lat, t: p.t }));
+        const line: Array<{ lon: number; lat: number }> = timed.length >= 2
+            ? extendWithNewerFixes(timed, fixes)
+            : forecast.hindcastPath.length >= 2 ? forecast.hindcastPath.map(([lon, lat]) => ({ lon, lat })) : fixes;
         let distanceKm = 0;
-        const hindcast = forecast.hindcastPath;
-        if (hindcast && hindcast.length >= 2) {
-            for (let i = 1; i < hindcast.length; i++) {
-                distanceKm += haversineKm(hindcast[i - 1][1], hindcast[i - 1][0], hindcast[i][1], hindcast[i][0]);
-            }
-        } else {
-            const fixes = rows.filter(r => r.t >= launchT && r.lat !== null && r.lon !== null) as Array<TelemetryRow & { lat: number; lon: number }>;
-            for (let i = 1; i < fixes.length; i++) {
-                distanceKm += haversineKm(fixes[i - 1].lat, fixes[i - 1].lon, fixes[i].lat, fixes[i].lon);
-            }
+        for (let i = 1; i < line.length; i++) {
+            distanceKm += haversineKm(line[i - 1].lat, line[i - 1].lon, line[i].lat, line[i].lon);
         }
         return { durationMs, distanceKm };
-    }, [rows, forecast.hindcastPath, nowMs, launchT, archived]);
+    }, [rows, forecast.hindcastTrack, forecast.hindcastPath, nowMs, launchT, archived]);
 
     /* What the panel header shows as "Launched …": the telemetry-detected
      * moment, not the hand-set devices row. Pre-launch this is null and the
