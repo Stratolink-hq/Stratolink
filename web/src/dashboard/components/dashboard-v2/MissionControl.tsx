@@ -43,6 +43,7 @@ import { mergeRegisteredBalloons } from '@/lib/community/types';
 import { defaultFleetFilters, filterFleet, isPlannedBalloon, readFleetFilters, saveFleetFilters } from '@/lib/telemetry/fleetFilters';
 import { forecastEligible, forecastViewFor } from '@/lib/telemetry/forecastEligibility';
 import { flightTrack } from '@/lib/telemetry/flightTrack';
+import { extendWithNewerFixes, liveForecastPath, timedForecastLeg } from '@/lib/telemetry/liveTrack';
 import { withLatestTelemetry } from '@/lib/telemetry/fleetSummary';
 import { useFleetReconstruction } from './useFleetReconstruction';
 import { reconstructedFlightTrack } from '@/lib/telemetry/reconstructedTrack';
@@ -794,10 +795,14 @@ function MapColumn({
      * actual GPS-fix times — so the marker stays in lockstep with the transmit
      * dots. (The old even-by-index spacing drifted: dense early segments got
      * stretched in time, pushing dots ahead of the marker.) Fall back to even
-     * spacing only for forecasts computed before the timed track existed. */
+     * spacing only for forecasts computed before the timed track existed.
+     * The stored forecast is rebuilt only a few times a day, so the fixes
+     * reported since it was generated are appended: the drawn path, the scrub
+     * target and the marker then follow every new fix, not just the ones the
+     * last run knew about. */
     const hindcastTrack: V2FlightPoint[] = useMemo(() => {
         const timed = forecast.hindcastTrack;
-        if (timed.length >= 2) return timed.map(p => ({ lon: p.lon, lat: p.lat, t: p.t }));
+        if (timed.length >= 2) return extendWithNewerFixes(timed.map(p => ({ lon: p.lon, lat: p.lat, t: p.t })), trackPoints);
         const pts = forecast.hindcastPath;
         if (pts.length < 2 || trackPoints.length === 0) return [];
         const t0 = trackPoints[0].t;
@@ -812,7 +817,8 @@ function MapColumn({
      * and the actual GPS-fix times — needs the timed track, so older forecasts
      * (no timestamps) just render as one solid line. */
     const hindcastSegments = useMemo<Array<{ coords: Array<[number, number]>; estimated: boolean }>>(() => {
-        const track = forecast.hindcastTrack;
+        /* The timed track plus the fixes received since the forecast was built. */
+        const track = forecast.hindcastTrack.length >= 2 ? hindcastTrack : [];
         if (track.length < 2) return [];
         const fixT = trackPoints.map(p => p.t).filter(t => Number.isFinite(t)).sort((a, b) => a - b);
         if (fixT.length < 2) return [];
@@ -842,7 +848,14 @@ function MapColumn({
         }
         if (runEst !== null) segs.push({ coords: run, estimated: runEst });
         return segs;
-    }, [forecast.hindcastTrack, trackPoints]);
+    }, [forecast.hindcastTrack, hindcastTrack, trackPoints]);
+
+    /* The reconstructed line the map draws and scrubs along: the stored path
+     * continued through the fixes reported since the forecast was built. */
+    const hindcastPath = useMemo<Array<[number, number]>>(
+        () => forecast.hindcastTrack.length >= 2 ? hindcastTrack.map(p => [p.lon, p.lat]) : forecast.hindcastPath,
+        [forecast.hindcastTrack, forecast.hindcastPath, hindcastTrack],
+    );
 
     /* One continuous timed track the balloon glides along, end to end:
      *   hindcast (reconstructed between fixes) → predicted-hindcast (last fix →
@@ -863,16 +876,12 @@ function MapColumn({
             }
         }
 
-        /* forecast: origin ("now") → horizon end */
-        const fp = forecast.path;
-        const startT = originT ?? lastT;
-        const endT = forecast.endT;
-        if (fp.length >= 2 && startT !== null && endT !== null && endT > startT) {
-            const span = endT - startT;
-            for (let i = 1; i < fp.length; i++) {
-                out.push({ lon: fp[i][0], lat: fp[i][1], t: startT + (i / (fp.length - 1)) * span });
-            }
-        }
+        /* forecast: origin ("now") → horizon end. Fixes reported after the
+         * forecast was built have overtaken the start of its path; those points
+         * are skipped so the track stays in time order and the marker never
+         * glides along a projection the balloon has already flown past. */
+        const observedEndT = out.length ? out[out.length - 1].t : null;
+        out.push(...timedForecastLeg(forecast.path, originT ?? lastT, forecast.endT, observedEndT));
         return out;
     }, [hindcastTrack, trackPoints, forecast.predictedHindcast, forecast.path, forecast.originT, forecast.endT]);
 
@@ -927,6 +936,16 @@ function MapColumn({
         return [[last.lon, last.lat], forecast.path[0]];
     }, [forecast.staleGps, forecast.predictedHindcast, forecast.path, trackPoints]);
 
+    /* The projection to draw. Between forecast runs the balloon keeps reporting,
+     * so the stored path (and each ensemble member) is restarted from the newest
+     * fix with the part already flown past dropped — until the next run rebuilds
+     * it from that fix. Unchanged while no fix postdates the forecast origin. */
+    const liveForecast = useMemo(() => {
+        const lastFix = trackPoints.length ? trackPoints[trackPoints.length - 1] : null;
+        const live = (path: Array<[number, number]>) => liveForecastPath(path, forecast.originT, forecast.endT, lastFix);
+        return { path: live(forecast.path), ensemble: forecast.ensemble.map(live).filter(member => member.length >= 2) };
+    }, [forecast.path, forecast.ensemble, forecast.originT, forecast.endT, trackPoints]);
+
 
     const pickPath: V2FlightPoint[] = trackPoints.length >= 2 ? trackPoints : hindcastTrack;
     const fleetPaths = useMemo(() => fleetDevices.map(device => ({
@@ -964,11 +983,11 @@ function MapColumn({
                 projection="globe"
                 gateways={mapGateways}
                 showTransmitPoints
-                hindcastPath={forecast.hindcastPath}
+                hindcastPath={hindcastPath}
                 hindcastSegments={hindcastSegments}
                 staleLine={staleLine}
-                forecastPath={forecast.path}
-                forecastEnsemble={forecast.ensemble}
+                forecastPath={liveForecast.path}
+                forecastEnsemble={liveForecast.ensemble}
                 forecastEllipses={forecast.ellipses}
                 divergence={forecast.divergence}
                 colorScheme={colorScheme}
@@ -980,8 +999,8 @@ function MapColumn({
 
             <MapLegend
                 fleet={isFleet}
-                hasForecast={forecast.path.length >= 2 || forecast.ensemble.length > 0 || forecast.ellipses.length > 0 || (staleLine?.length ?? 0) >= 2 || forecast.divergence != null}
-                hasHindcast={forecast.hindcastPath.length >= 2 || trackPoints.length >= 2}
+                hasForecast={liveForecast.path.length >= 2 || liveForecast.ensemble.length > 0 || forecast.ellipses.length > 0 || (staleLine?.length ?? 0) >= 2 || forecast.divergence != null}
+                hasHindcast={hindcastPath.length >= 2 || trackPoints.length >= 2}
                 hasEstimated={hindcastSegments.some(s => s.estimated)}
                 hasGateways={flightHasGateways}
                 colorScheme={colorScheme}
