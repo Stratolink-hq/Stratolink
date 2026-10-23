@@ -5,13 +5,16 @@ import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { useCommunity } from './community-account';
 import { useDashboardTheme } from './dashboard-theme';
 import { useDashboardControls } from './dashboard-controls';
+import { useUnits } from './dashboard-units';
 
 export default function DashboardHeader({ onBack }: { onBack?: (animate?: boolean) => void }) {
     const community = useCommunity();
     const { theme, setTheme } = useDashboardTheme();
     const controls = useDashboardControls();
+    const { units, setUnits } = useUnits();
     const menuId = useId();
     const themeName = useId();
+    const unitsName = useId();
     const trigger = useRef<HTMLButtonElement>(null);
     const menu = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
@@ -103,16 +106,31 @@ export default function DashboardHeader({ onBack }: { onBack?: (animate?: boolea
             >
                 <fieldset className="dashboard-menu-group">
                     <legend>Appearance</legend>
-                    <div className="dashboard-theme-choices">
-                        <label className="dashboard-theme-choice">
+                    <div className="dashboard-choices">
+                        <label className="dashboard-choice">
                             <input type="radio" name={themeName} value="light" checked={theme === 'light'} onChange={() => pickTheme('light')} />
                             <FontAwesomeIcon icon={faSun} aria-hidden />
                             Light
                         </label>
-                        <label className="dashboard-theme-choice">
+                        <label className="dashboard-choice">
                             <input type="radio" name={themeName} value="dark" checked={theme === 'dark'} onChange={() => pickTheme('dark')} />
                             <FontAwesomeIcon icon={faMoon} aria-hidden />
                             Dark
+                        </label>
+                    </div>
+                </fieldset>
+                <fieldset className="dashboard-menu-group dashboard-unit-options">
+                    <legend>Units</legend>
+                    <div className="dashboard-choices">
+                        <label className="dashboard-choice">
+                            <input type="radio" name={unitsName} value="metric" checked={units === 'metric'} onChange={() => setUnits('metric')} />
+                            Metric
+                            <span className="dashboard-choice-detail" aria-hidden>m · km · °C</span>
+                        </label>
+                        <label className="dashboard-choice">
+                            <input type="radio" name={unitsName} value="imperial" checked={units === 'imperial'} onChange={() => setUnits('imperial')} />
+                            Imperial
+                            <span className="dashboard-choice-detail" aria-hidden>ft · mi · °F</span>
                         </label>
                     </div>
                 </fieldset>

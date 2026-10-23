@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useDashboardControls } from './dashboard-controls';
+import { useUnits } from './dashboard-units';
 
 /* Single consolidated map legend — flight-path states + gateway coverage in
  * one card (top-right). Collapsible; defaults collapsed on mobile where space
@@ -13,6 +14,8 @@ export default function MapLegend({ hasForecast, hasHindcast, hasEstimated, hasG
     const isMobile = useIsMobile();
     const { showGateways, showReceivingStations, showFlightTrail, showProjectedPath } = useDashboardControls();
     const showFlightPaths = showFlightTrail && !fleet;
+    const u = useUnits();
+    const range = (km: number) => `${Math.round(u.distance(km))} ${u.labels.distance}`;
     /* Swatch colors mirror the actual map layers, which shift with the basemap
      * (see V2MissionMap `C` + GatewayLayer COVERAGE_STYLE). */
     const dark = colorScheme === 'dark';
@@ -81,8 +84,8 @@ export default function MapLegend({ hasForecast, hasHindcast, hasEstimated, hasG
                         />
                     )}
                     {showReceivingStations && hasGateways && <LegendRow swatch={lineSwatch(L.sightLine)} label="reception link" />}
-                    {showGateways && <LegendRow swatch={boxSwatch(L.covFill, L.covStroke)} label="150 km - in range" />}
-                    {showGateways && <LegendRow swatch={lineSwatch(L.sightLine, true, 15)} label="250 km - sightline" />}
+                    {showGateways && <LegendRow swatch={boxSwatch(L.covFill, L.covStroke)} label={`${range(150)} - in range`} />}
+                    {showGateways && <LegendRow swatch={lineSwatch(L.sightLine, true, 15)} label={`${range(250)} - sightline`} />}
                     </>}
                     {!fleet && !showGateways && !showReceivingStations && !showFlightPaths && !showProjectedPath && <span>No layers selected</span>}
                 </div>

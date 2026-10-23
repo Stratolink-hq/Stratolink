@@ -6,6 +6,7 @@ import type { TelemetryRow } from './atoms';
 import { OfficialBadge, BalloonOwner } from './BalloonIdentity';
 import { isPlannedBalloon, registeredStatus } from '@/lib/telemetry/fleetFilters';
 import { altitudeAtTime, balloonName, rowAtTime } from '@/lib/telemetry/fleetPlayback';
+import { useUnits } from './dashboard-units';
 
 export const BALLOON_COLORS = ['#a23a2d', '#476f83', '#7a7650', '#806682'];
 export const balloonColor = (id: string) => BALLOON_COLORS[id === 'stratolink-2' ? 0 : id === 'stratolink-3' ? 1 : [...id].reduce((sum,c) => sum+c.charCodeAt(0),0) % BALLOON_COLORS.length];
@@ -51,10 +52,11 @@ const FleetCard = memo(function FleetCard({ device, rows, waiting, scrubT, now, 
     const status = registeredStatus(device.status) ?? (waiting ? 'Loading telemetry' : beforeFlight ? 'No data yet' : !row ? 'No telemetry' : awaitingFlightData ? 'Missing' : scrubT !== null ? 'Recorded telemetry' : device.status === 'landed' || device.status === 'recovered'
         ? 'Landed' : latest && now - latest.t < 15 * 60_000 ? 'Transmitting' : 'No recent signal');
     const altitude = row ? altitudeAtTime(rows, row.t) : null;
+    const u = useUnits();
     const metrics = [
-        { label: 'Altitude', value: altitude != null ? Math.round(altitude).toLocaleString('en-US') : '-', unit: altitude != null ? 'm' : '' },
+        { label: 'Altitude', value: altitude != null ? Math.round(u.altitude(altitude)).toLocaleString('en-US') : '-', unit: altitude != null ? u.labels.altitude : '' },
         { label: 'Storage', value: row?.batt != null ? row.batt.toFixed(2) : '-', unit: row?.batt != null ? 'V' : '' },
-        { label: 'Temperature', value: row?.temp != null ? row.temp.toFixed(1) : '-', unit: row?.temp != null ? '°C' : '' },
+        { label: 'Temperature', value: row?.temp != null ? u.temperature(row.temp).toFixed(1) : '-', unit: row?.temp != null ? u.labels.temperature : '' },
         { label: 'RSSI', value: row?.rssi != null ? Math.round(row.rssi) : '-', unit: row?.rssi != null ? 'dBm' : '' },
     ];
     return (

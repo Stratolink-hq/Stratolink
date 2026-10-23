@@ -173,13 +173,13 @@
     font-weight: 500;
 }
 
-.dashboard-theme-choices {
+.dashboard-choices {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 6px;
 }
 
-.dashboard-theme-choice {
+.dashboard-choice {
     position: relative;
     display: flex;
     align-items: center;
@@ -194,18 +194,40 @@
     transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
-.dashboard-theme-choice:has(input:checked) {
+.dashboard-choice:has(input:checked) {
     border-color: var(--t-border-2);
     background: var(--t-panel-2);
     color: var(--t-text);
 }
 
-.dashboard-theme-choice svg {
+.dashboard-choice svg {
     width: 12px;
     height: 12px;
 }
 
-.dashboard-theme-choice input,
+/* The units choices carry a second line naming what each system shows. */
+.dashboard-choice-detail {
+    flex-basis: 100%;
+    margin-top: -4px;
+    color: var(--t-text-3);
+    font-size: 9.5px;
+    letter-spacing: 0.02em;
+    text-align: center;
+}
+
+.dashboard-unit-options .dashboard-choice {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    padding: 6px 0;
+}
+
+.dashboard-unit-options {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--t-border);
+}
+
+.dashboard-choice input,
 .dashboard-layer-option input {
     position: absolute;
     inset: 0;
@@ -294,7 +316,7 @@
 .dashboard-home-link:focus-visible,
 .dashboard-menu-trigger:focus-visible,
 .dashboard-back:focus-visible,
-.dashboard-theme-choice:has(input:focus-visible),
+.dashboard-choice:has(input:focus-visible),
 .dashboard-layer-option:has(input:focus-visible) {
     outline: 2px solid var(--t-accent);
     outline-offset: 3px;
@@ -321,7 +343,7 @@
     .dashboard-register,
     .dashboard-menu-trigger,
     .dashboard-back,
-    .dashboard-theme-choice,
+    .dashboard-choice,
     .dashboard-switch-track,
     .dashboard-switch-track::after {
         transition: none;

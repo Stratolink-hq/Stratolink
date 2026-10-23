@@ -23,6 +23,7 @@ import { LineTrend } from './charts';
 import { Divider, DOT, Group } from './primitives';
 import { OfficialBadge, BalloonOwner } from '../BalloonIdentity';
 import { balloonName } from '@/lib/telemetry/fleetPlayback';
+import { useUnits } from '../dashboard-units';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -195,6 +196,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
      * visible above the map, so it earns its space. */
     const compact = variant === 'summary';
     const flight = useMemo(() => buildFlightSeries(rows), [rows]);
+    const u = useUnits();
 
     /* Point-in-time readings: blanked when scrubbed past the last transmission
      * (there's no telemetry out in the forecast). */
@@ -233,7 +235,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
     const toggleChart = (key: ChartKey) => setChartKey(current => (current === key ? 'temp' : key));
     const tiltSeries = useMemo(() => rows.map(r => computePayloadAttitude(r.ax, r.ay, r.az)?.tiltDeg ?? null), [rows]);
     const chart = ({
-        temp: { series: flight.temp, value: row?.temp ?? null, fmtFn: (v: number) => tlmFmt.d1(v), unit: '°C' },
+        temp: { series: flight.temp, value: row?.temp ?? null, fmtFn: (v: number) => tlmFmt.d1(u.temperature(v)), unit: u.labels.temperature },
         batt: { series: flight.batt, value: batt ?? null, fmtFn: (v: number) => tlmFmt.d2(v), unit: 'V' },
         solar: { series: flight.solar, value: solar ?? null, fmtFn: (v: number) => tlmFmt.d2(v), unit: 'V' },
         lux: { series: flight.lux, value: lux, fmtFn: fmtLux, unit: 'lux' },
@@ -294,7 +296,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                     }}
                 >
                     <Metric label="Flight time" value={summary.durationMs != null ? fmt.duration(summary.durationMs) : '-'} />
-                    <Metric label="Total dist" value={Math.round(summary.distanceKm).toLocaleString('en-US')} unit="km" />
+                    <Metric label="Total dist" value={tlmFmt.int(u.distance(summary.distanceKm))} unit={u.labels.distance} />
                     <Metric label="Last contact" value={<LastContactValue lastContactT={device?.lastContactT ?? null} />} />
                 </div>
                 <div style={{ padding: compact ? '0 var(--telemetry-gutter, 18px) 12px' : '0 var(--telemetry-gutter, 18px) 16px' }}>
@@ -328,8 +330,8 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                                 </span>
                             )}
                             <span className="disp mono" style={{ fontSize: 22, fontWeight: 600 }}>
-                                {altVal != null ? tlmFmt.int(altVal) : '-'}
-                                {altVal != null && <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-3)', marginLeft: 3 }}>m</span>}
+                                {tlmFmt.int(u.altitude(altVal) ?? null)}
+                                {altVal != null && <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-3)', marginLeft: 3 }}>{u.labels.altitude}</span>}
                             </span>
                         </span>
                     </div>
@@ -338,8 +340,8 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                         times={flight.times}
                         band={[8500, 12000]}
                         status={altStatus}
-                        fmtFn={(v) => tlmFmt.int(v)}
-                        unit="m"
+                        fmtFn={(v) => tlmFmt.int(u.altitude(v))}
+                        unit={u.labels.altitude}
                         height={58}
                         scrubT={scrubT ?? scrubRow?.t ?? null}
                         onPickTime={onPickTime}
