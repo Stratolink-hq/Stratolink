@@ -41,7 +41,7 @@ export function DashboardControlsProvider({ children }: { children: ReactNode })
     const [showGateways, setShowGateways] = useStoredVisibility('gateways');
     const [showDayNight, setShowDayNight] = useStoredVisibility('day-night');
     const [showFlightTrail, setShowFlightTrail] = useStoredVisibility('flight-paths', true, ['flight-tails', 'detail-paths']);
-    const [showProjectedPath, setShowProjectedPath] = useStoredVisibility('projected-path', false, ['fleet-projection', 'detail-projection']);
+    const [showProjectedPath, setShowProjectedPath] = useStoredVisibility('projected-path', true, ['fleet-projection', 'detail-projection']);
 
     return (
         <DashboardControlsContext.Provider value={{
