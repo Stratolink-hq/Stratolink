@@ -7,6 +7,7 @@ The source is Teddy Warner's launch photograph, supplied as `/Users/twarn/Downlo
 | Asset | Dimensions | Use |
 | --- | --- | --- |
 | `public/assets/launch/source.jpg` | 2560 × 1440 | Source photograph for the layer compiler and social card |
+| `public/assets/launch/sky.webp` | 2560 × 1440, RGB | Served sky plate: `sky.png`'s colour with the original photograph's detail in clear sky (`scripts/prepare-launch-sky.py`) |
 | `public/assets/launch/sky.png` | 1672 × 941, RGB | Clear sky plate inpainted with the built-in image generator; fills behind the moving city, clouds and balloon |
 | `public/assets/launch/city-clouds.png` | 1672 × 941, RGBA | Generated alpha mask for the original skyline, clouds and foreground palm |
 | `public/assets/launch/balloon.png` | 1672 × 941, RGBA | Generated alpha mask for the original balloon, tether and payload |
@@ -18,6 +19,8 @@ The source is Teddy Warner's launch photograph, supplied as `/Users/twarn/Downlo
 The original extraction files supply alpha only; their generated RGB pixels are not displayed. `scripts/prepare-launch-layers.mjs` compiles the original photograph through those masks using the same SVG filters. It writes `city-desktop.webp`, `city-mobile.webp` and the tightly cropped `balloon-cutout.webp`. The mobile version retains the alpha transfer that removes faint sky residue. The balloon keeps its dilated, feathered tether and restricted mask bounds. Runtime layers are transparent images, so phones do not need to rasterize the SVG filters. Regeneration requires `rsvg-convert` and `cwebp`; the compiled files are committed and deployment has no extra tool dependency.
 
 The city layers retain the photograph's 2560 × 1440 framing. The balloon is a 205 × 403 crop at (1228, 432), positioned within that same frame. Encoding uses WebP quality 90 and alpha quality 100. The sky plate remains an inpainted approximation of the original clear-sky gradient, including areas originally hidden by foreground objects.
+
+The served sky is rebuilt at the full 2560 × 1440 with `python3 scripts/prepare-launch-sky.py /path/to/IMG_3466.jpg` (numpy, Pillow, `cwebp`). The full-quality original is needed: `source.jpg` is a heavily compressed copy whose sky shows block artefacts when phones scale it up. The script keeps `sky.png`'s colour and gradient everywhere, adds the photograph's own grain where the sky is clear, and matching synthetic grain where the city, clouds and balloon hide it.
 
 The homepage also carries a 32 × 18 blurred placeholder of `source.jpg` inlined as a base64 WebP in `index.html` (between the `home-placeholder` markers). It paints behind the hero while the full layers download. Regenerate it with `node scripts/prepare-launch-placeholder.mjs` (requires ImageMagick `magick`) after changing the source photograph.
 
