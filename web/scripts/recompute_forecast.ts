@@ -26,7 +26,7 @@ import { createServiceRoleClient } from '@/lib/supabase';
 import { buildForecastInputForDevice } from '@/lib/wind/buildForecastInput';
 import { isBlobStorageConfigured, readStoredForecast } from '@/lib/wind/forecastStorage';
 import { emptyManifest, writeManifest, type ForecastManifest } from '@/lib/wind/forecastManifest';
-import { planConfigFromEnv, storedForecastSummary, PLAN_VERSION, type ForecastPlan } from '@/lib/wind/forecastPlan';
+import { planConfigFromEnv, storedForecastSummary, PLAN_VERSION, type ForecastPlan, type StoredForecastSummary } from '@/lib/wind/forecastPlan';
 import { decideRecompute, type CubeSetSummary, type RecomputeDecision } from '@/lib/wind/forecastRecompute';
 
 const CUBE_DIR = process.env.WIND_CUBE_DIR ?? join(process.cwd(), '.windcube', 'cubes');
@@ -179,7 +179,7 @@ async function main(): Promise<void> {
     const connected = device?.connection_status === 'connected';
     let newestFixUtc: string | null = null;
     let nFixes = 0;
-    let stored = null;
+    let stored: StoredForecastSummary | null = null;
     let cubes: CubeSetSummary | null = null;
     let objects: CubeObject[] = [];
     let setManifest: Record<string, unknown> | null = null;

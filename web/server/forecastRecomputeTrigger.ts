@@ -63,7 +63,7 @@ export function createRecomputeTrigger(options: RecomputeTriggerOptions = {}) {
   const env = options.env ?? process.env;
   const fetchFn = options.fetch ?? globalThis.fetch;
   const isFlying = options.isFlying ?? defaultIsFlying;
-  const schedule = options.schedule ?? ((fn, ms) => { setTimeout(fn, ms).unref?.(); });
+  const schedule = options.schedule ?? ((fn, ms) => { setTimeout(fn, ms); });
   const now = options.now ?? Date.now;
   const debounceMs = options.debounceMs ?? DEBOUNCE_MS;
   const keepAlive = options.keepAlive ?? vercelWaitUntil;
