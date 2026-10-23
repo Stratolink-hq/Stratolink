@@ -162,6 +162,7 @@ def run_tool(
         capture_output=True,
         check=False,
         env=environment,
+        umask=0o022,
     )
 
 
@@ -197,7 +198,7 @@ def main() -> None:
         writes_path.write_text("0", encoding="utf-8")
         set_state_word(state_path, 0)
 
-        happy_prefix = root / "happy"
+        happy_prefix = root / "new private parent" / "nested" / "happy"
         ready = run_tool(
             happy_prefix,
             fake_bin,
@@ -215,6 +216,10 @@ def main() -> None:
             happy_prefix, fake_bin, state_path, calls_path, writes_path
         )
         assert happy.returncode == 0, happy.stdout + happy.stderr
+        assert happy_prefix.parent.stat().st_mode & 0o777 == 0o700
+        assert happy_prefix.parent.parent.stat().st_mode & 0o777 == 0o700
+        for path in happy_prefix.parent.iterdir():
+            assert path.stat().st_mode & 0o777 == 0o600, str(path)
         happy_paths = artifact_paths(happy_prefix)
         manifest = json.loads(happy_paths["manifest"].read_text(encoding="utf-8"))
         assert manifest["passed"] is True

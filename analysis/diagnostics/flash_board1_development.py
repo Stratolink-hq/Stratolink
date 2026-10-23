@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import tempfile
 
+from evidence_provenance import private_evidence_files
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -117,6 +118,7 @@ def bound_file_record(
     return record
 
 
+@private_evidence_files()
 def write_bytes_exclusive(path: Path, value: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("xb") as handle:
@@ -125,6 +127,7 @@ def write_bytes_exclusive(path: Path, value: bytes) -> None:
         os.fsync(handle.fileno())
 
 
+@private_evidence_files()
 def write_exclusive(path: Path, value: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as handle:
@@ -141,6 +144,7 @@ def commit_partial_create_once(partial: Path, path: Path, noun: str) -> None:
     partial.unlink()
 
 
+@private_evidence_files()
 def atomic_manifest(path: Path, value: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -186,7 +190,7 @@ def require_create_once(paths: dict[str, Path]) -> None:
     collisions: list[str] = []
     for path in paths.values():
         for candidate in (path, path.with_suffix(path.suffix + ".partial")):
-            if candidate.exists():
+            if candidate.exists() or candidate.is_symlink():
                 collisions.append(str(candidate))
     if collisions:
         raise SystemExit(
@@ -447,6 +451,7 @@ def record_post_access(
     return record
 
 
+@private_evidence_files()
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prefix", type=Path, required=True)

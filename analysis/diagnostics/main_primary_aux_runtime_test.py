@@ -425,12 +425,21 @@ int main() {
         aux_prefer_b2b = prefer_b2b; in.auxiliary = Tx::RadioFailure; cycle();
         expect(ports.size() == 2 && ctt_queue_count(&ctt) == 1 && b2b_pending && b2b_acks == 0,
                "failed auxiliary retains queue and never tries other queue");
-        expect(aux_uplink_cooldown == 0 && aux_prefer_b2b == prefer_b2b,
-               "failed auxiliary preserves cooldown and alternation");
+        expect(aux_uplink_cooldown == 7 && aux_prefer_b2b != prefer_b2b,
+               "ambiguous auxiliary handoff consumes allowance and alternates fairly");
+        for (unsigned n = 0; n < 7; ++n) cycle();
+        expect(std::count(ports.begin(), ports.end(), prefer_b2b ? 12 : 11) == 1 &&
+               ports.size() == 9 && aux_uplink_cooldown == 0,
+               "eight successful primaries allow only one ambiguous auxiliary handoff");
+        expect(ctt_queue_count(&ctt) == 1 && b2b_pending && b2b_acks == 0,
+               "ambiguous auxiliary stays queued throughout cooldown");
         events.clear(); ports.clear(); in.auxiliary = Tx::Success; cycle();
-        expect(ports == std::vector<uint8_t>({1, static_cast<uint8_t>(prefer_b2b ? 12 : 11)}),
-               "next healthy primary retries same queue");
-        expect(aux_uplink_cooldown == 7 && aux_prefer_b2b != prefer_b2b, "successful retry commits shared allowance");
+        expect(ports == std::vector<uint8_t>({1, static_cast<uint8_t>(prefer_b2b ? 11 : 12)}),
+               "next shared allowance serves the other queue after ambiguous handoff");
+        expect(aux_uplink_cooldown == 7 && aux_prefer_b2b == prefer_b2b,
+               "successful other queue hands preference back to retained event");
+        expect(prefer_b2b ? b2b_pending : ctt_queue_count(&ctt) == 1,
+               "failed queue survives successful service of its peer");
     }
     reset("both queues B2B priority"); aux_prefer_b2b = true; cycle();
     expect(ports == std::vector<uint8_t>({1, 12}) && ctt_queue_count(&ctt) == 1 && !b2b_pending,
@@ -494,8 +503,8 @@ def main() -> None:
          "primary Class-A precedes auxiliary RF"),
         ("double auxiliary dispatch", replace_once(source, "} else if (ctt_pending) {", "} if (ctt_pending) {"),
          "B2B priority sends only one shared auxiliary frame"),
-        ("failed CTT acknowledged", replace_once(source, "if (lorawan_send_uplink_port(CTT_EVENT_FPORT, event_payload,\n                                                 CTT_EVENT_PAYLOAD_SIZE)) {",
-          "if ((lorawan_send_uplink_port(CTT_EVENT_FPORT, event_payload,\n                                                 CTT_EVENT_PAYLOAD_SIZE), true)) {"),
+        ("failed CTT acknowledged", replace_once(source, "if (lorawan_send_uplink_port(CTT_EVENT_FPORT, event_payload,\n                                                 CTT_EVENT_PAYLOAD_SIZE, &aux_rf_handed_off)) {",
+          "if ((lorawan_send_uplink_port(CTT_EVENT_FPORT, event_payload,\n                                                 CTT_EVENT_PAYLOAD_SIZE, &aux_rf_handed_off), true)) {"),
          "failed auxiliary retains queue"),
         ("cooldown shortened", replace_once(source, "(uint8_t)(AUX_UPLINK_INTERVAL_CYCLES - 1u);", "0;"),
          "successful CTT commits queue cooldown and alternation"),

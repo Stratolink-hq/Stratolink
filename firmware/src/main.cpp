@@ -577,6 +577,7 @@ void loop() {
         }
     }
 
+    const bool freefall_cooldown_active = burst_cooldown > 0;
     if (burst_cooldown > 0) {
         burst_cooldown = freefall_wake ? BURST_COOLDOWN_CYCLES : (uint8_t)(burst_cooldown - 1);
     } else if (freefall_wake && !burst_mode &&
@@ -694,26 +695,32 @@ void loop() {
     }
 #endif
 
-    /* A genuine freefall may arrive while the MCU is already active rather
-     * than during STOP1. gps_ublox_get_fix() now yields within 100 ms, but the
-     * normal cycle would otherwise continue through sensors, primary TX, and
-     * Class-A RX before the pending flag is consumed at the next loop top.
-     * Apply any fresh GNSS region decision above first, then quiesce and let
-     * the next iteration enter burst mode on the correct legal plan. */
+    /* A first freefall during an ordinary acquisition gets an immediate
+     * handoff after applying any fresh region decision. Further edges during
+     * recovery are coalesced so they cannot starve primary work or its cap. */
     if (power_manager_freefall_pending()) {
-        /* The acquisition path already quiesced GNSS immediately after its
-         * poll. Cover only the power-gated path here; issuing PMREQ twice
-         * would add another ~300 ms to the burst response for no benefit. */
-        if (!gps_attempted_this_cycle) (void)gps_ublox_quiesce();
-        lorawan_sleep();
+        if (freefall_wake || burst_mode || freefall_cooldown_active) {
+            /* Already handling recovery: coalesce another edge so primary
+             * work, the burst cap and sleep selection still execute. */
+            (void)power_manager_did_wake_from_freefall();
+            if (freefall_cooldown_active) {
+                burst_cooldown = BURST_COOLDOWN_CYCLES;
+            }
+        } else {
+            /* The acquisition path already quiesced GNSS immediately after its
+             * poll. Cover only the power-gated path here; issuing PMREQ twice
+             * would add another ~300 ms to the burst response for no benefit. */
+            if (!gps_attempted_this_cycle) (void)gps_ublox_quiesce();
+            lorawan_sleep();
 #ifndef BENCH_SEED_REGION
-        uint32_t interrupted_active_sec =
-            (millis() - cycle_started_ms + 999u) / 1000u;
-        region_fix_age_sec = region_fix_age_advance(
-            region_fix_age_sec, interrupted_active_sec);
-        persist_region_lease_if_trusted();
+            uint32_t interrupted_active_sec =
+                (millis() - cycle_started_ms + 999u) / 1000u;
+            region_fix_age_sec = region_fix_age_advance(
+                region_fix_age_sec, interrupted_active_sec);
+            persist_region_lease_if_trusted();
 #endif
-        return;
+            return;
+        }
     }
 
     /* A reset can land after the third miss was durably committed but before
@@ -1052,7 +1059,7 @@ void loop() {
                  * crossed the regional lease deadline, do not emit a later
                  * auxiliary packet even though the primary was legal. */
             } else {
-                bool aux_sent = false;
+                bool aux_rf_handed_off = false;
 
 #if defined(CTT_LISTEN_ENABLE) && CTT_LISTEN_ENABLE
                 ctt_detection_t pending_ctt;
@@ -1074,11 +1081,10 @@ void loop() {
                 if (send_b2b) {
 #if defined(B2B_ENABLE) && B2B_ENABLE
                     if (lorawan_send_uplink_port(B2B_EVENT_FPORT, pending_b2b,
-                                                 pending_b2b_len)) {
+                                                 pending_b2b_len, &aux_rf_handed_off)) {
                         /* FCntUp was durably reserved before RF; only now may
                          * the current RAM queue remove the event. */
                         lorawan_b2b_ack_pending_uplink();
-                        aux_sent = true;
                     }
 #endif
                 } else if (ctt_pending) {
@@ -1089,16 +1095,18 @@ void loop() {
                         power_manager_monotonic_seconds() / 60u,
                         event_payload);
                     if (lorawan_send_uplink_port(CTT_EVENT_FPORT, event_payload,
-                                                 CTT_EVENT_PAYLOAD_SIZE)) {
+                                                 CTT_EVENT_PAYLOAD_SIZE, &aux_rf_handed_off)) {
                         /* The incremented FCnt was persisted before RF; only
                          * now may the current RAM queue remove the event. */
                         lorawan_ctt_ack_pending();
-                        aux_sent = true;
                     }
 #endif
                 }
 
-                if (aux_sent) {
+                /* An RF timeout/cleanup error can follow an emitted packet.
+                 * Charge that slot and alternate fairly, but keep its event
+                 * queued until a later send reports success. */
+                if (aux_rf_handed_off) {
                     aux_uplink_cooldown =
                         (uint8_t)(AUX_UPLINK_INTERVAL_CYCLES - 1u);
                     aux_prefer_b2b = !send_b2b;

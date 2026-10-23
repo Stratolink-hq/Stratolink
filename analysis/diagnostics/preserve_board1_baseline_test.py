@@ -9,6 +9,10 @@ import sys
 import tempfile
 import unittest
 
+import flash_board1_development
+import preserve_board1_baseline
+import provision_board1_launch_authority
+
 from preserve_board1_baseline import (
     FLASH_ADDRESS,
     FLASH_BYTES,
@@ -30,6 +34,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shlex
 import sys
 import time
 
@@ -90,7 +95,7 @@ for command in commands:
     elif name == "h":
         print("PC = 08009374, CycleCnt = 6B7D59E2")
     elif name == "savebin":
-        _, destination, address, size = command.split()
+        _, destination, address, size = shlex.split(command)
         value = b"\0" * int(size, 0)
         if "timeout" in mode or mode in ("read_failure", "partial", "early_exit"):
             value = b"bad"
@@ -151,10 +156,82 @@ class WrapperTests(unittest.TestCase):
         return subprocess.run(
             [sys.executable, str(SCRIPT), "--prefix", str(self.prefix), *arguments],
             env=environment, text=True, capture_output=True, timeout=8, check=False,
+            umask=0o022,
         )
 
     def call_events(self) -> list[dict]:
         return [json.loads(line) for line in self.events.read_text().splitlines()]
+
+    def test_private_capture_with_spaces(self) -> None:
+        existing_mode = self.root.stat().st_mode & 0o777
+        self.prefix = self.root / "new parent" / "nested" / "capture"
+        self.paths = artifact_paths(self.prefix)
+        result = self.run_wrapper("success")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for path in self.prefix.parent.iterdir():
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600, str(path))
+        self.assertEqual(self.prefix.parent.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(self.prefix.parent.parent.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(self.root.stat().st_mode & 0o777, existing_mode)
+
+    def test_direct_writers_create_private_evidence(self) -> None:
+        previous = os.umask(0o022)
+        try:
+            for index, writer in enumerate((
+                flash_board1_development.write_bytes_exclusive,
+                preserve_board1_baseline.write_bytes_exclusive,
+                provision_board1_launch_authority.write_exclusive,
+            )):
+                path = self.root / str(index) / "nested" / "artifact"
+                writer(path, "synthetic" if index == 2 else b"synthetic")
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(path.parent.parent.stat().st_mode & 0o777, 0o700)
+        finally:
+            os.umask(previous)
+
+    def test_control_character_prefix_rejected_before_target_access(self) -> None:
+        for suffix in ("bad\nr\n", "bad\r", 'bad"'):
+            self.prefix = self.root / suffix / "capture"
+            result = self.run_wrapper("success")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(self.events.exists(), result.stdout + result.stderr)
+
+    def test_dangling_partial_is_rejected_before_target_access(self) -> None:
+        target = self.root / "must-not-create"
+        self.paths["ram"].with_suffix(".bin.partial").symlink_to(target)
+        result = self.run_wrapper("success")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.events.exists(), result.stdout + result.stderr)
+        self.assertFalse(target.exists())
+
+    def test_all_capture_guards_reject_dangling_partials(self) -> None:
+        for index, tool in enumerate((
+            preserve_board1_baseline, flash_board1_development,
+            provision_board1_launch_authority,
+        )):
+            with self.subTest(tool=tool.__name__):
+                prefix = self.root / str(index)
+                paths = tool.artifact_paths(prefix)
+                path = next(iter(paths.values()))
+                path.with_suffix(path.suffix + ".partial").symlink_to(
+                    self.root / "must-not-create"
+                )
+                with self.assertRaises(SystemExit):
+                    if tool is preserve_board1_baseline:
+                        tool.require_create_once(prefix, paths)
+                    else:
+                        tool.require_create_once(paths)
+
+    def test_interrupted_capture_partials_remain_private(self) -> None:
+        self.prefix = self.root / "private failure" / "capture"
+        self.paths = artifact_paths(self.prefix)
+        result = self.run_wrapper("partial")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(self.paths["ram"].with_suffix(".bin.partial").exists())
+        self.assertEqual(self.prefix.parent.stat().st_mode & 0o777, 0o700)
+        for path in self.prefix.parent.iterdir():
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600, str(path))
 
     def failure(self, result: subprocess.CompletedProcess[str]) -> dict:
         self.assertNotEqual(result.returncode, 0, result.stdout)

@@ -826,8 +826,9 @@ static bool send_uplink_port_mode(uint8_t fport, const uint8_t* payload,
 }
 
 bool lorawan_send_uplink_port(uint8_t fport, const uint8_t* payload,
-                              uint8_t payload_len) {
-    return send_uplink_port_mode(fport, payload, payload_len, false, nullptr);
+                              uint8_t payload_len, bool* rf_handed_off) {
+    return send_uplink_port_mode(
+        fport, payload, payload_len, false, rf_handed_off);
 }
 
 bool lorawan_send_uplink(const uint8_t* payload, uint8_t payload_len) {

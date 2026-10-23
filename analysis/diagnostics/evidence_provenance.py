@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -10,6 +11,17 @@ import tempfile
 from typing import Any
 
 
+@contextmanager
+def private_evidence_files():
+    """Keep new evidence and subprocess output private; leave existing modes alone."""
+    previous = os.umask(0o077)
+    try:
+        yield
+    finally:
+        os.umask(previous)
+
+
+@private_evidence_files()
 def write_exclusive(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as handle:
@@ -26,6 +38,7 @@ def commit_partial_create_once(partial: Path, path: Path, noun: str) -> None:
     partial.unlink()
 
 
+@private_evidence_files()
 def atomic_manifest(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -49,12 +62,13 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+@private_evidence_files()
 def write_create_once(path: Path, payload: bytes) -> None:
     """Atomically publish immutable evidence, refusing every overwrite race."""
-    path = path.resolve()
+    path = path.absolute()
     path.parent.mkdir(parents=True, exist_ok=True)
     partials = sorted(path.parent.glob(f".{path.name}.*.partial"))
-    collisions = ([path] if path.exists() else []) + partials
+    collisions = ([path] if path.exists() or path.is_symlink() else []) + partials
     if collisions:
         raise FileExistsError(
             "refusing to overwrite evidence: "

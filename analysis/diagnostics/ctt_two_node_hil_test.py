@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import struct
 import tempfile
+import unittest
+from unittest.mock import patch
 
 import ctt_two_node_hil
 
@@ -86,6 +89,120 @@ def evaluate(
     return output, True
 
 
+class EvidencePathTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="ctt-path-test-")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.inputs = [self.root / name for name in ("stats", "queue", "tx")]
+        self.blobs = passing_blobs()
+        for path, blob in zip(self.inputs, self.blobs):
+            path.write_bytes(blob)
+
+    def args(self, output: Path) -> argparse.Namespace:
+        return argparse.Namespace(
+            receiver_stats=self.inputs[0], receiver_queue=self.inputs[1],
+            transmitter_state=self.inputs[2], output=output,
+        )
+
+    def test_existing_result_is_unchanged(self) -> None:
+        output = self.root / "result.json"
+        output.write_bytes(b"previous evidence")
+        with self.assertRaises((SystemExit, FileExistsError)):
+            ctt_two_node_hil.evaluate(self.args(output))
+        self.assertEqual(output.read_bytes(), b"previous evidence")
+
+    def test_output_cannot_alias_input(self) -> None:
+        for index, source in enumerate(self.inputs):
+            with self.subTest(source=source.name):
+                for kind in ("direct", "symlink", "hardlink"):
+                    for path, blob in zip(self.inputs, self.blobs):
+                        path.write_bytes(blob)
+                    output = self.root / f"alias-{index}-{kind}"
+                    if kind == "direct":
+                        output = source
+                    elif kind == "symlink":
+                        output.symlink_to(source)
+                    else:
+                        os.link(source, output)
+                    with self.assertRaises((SystemExit, FileExistsError)):
+                        ctt_two_node_hil.evaluate(self.args(output))
+                    self.assertEqual(source.read_bytes(), self.blobs[index])
+
+    def test_dangling_output_symlink_is_rejected(self) -> None:
+        target = self.root / "must-not-create"
+        output = self.root / "result.json"
+        output.symlink_to(target)
+        with self.assertRaises((SystemExit, FileExistsError)):
+            ctt_two_node_hil.evaluate(self.args(output))
+        self.assertFalse(target.exists())
+
+    def test_generate_preflights_every_output(self) -> None:
+        for index, name in enumerate((
+            "manifest.json", "read_receiver.jlink", "read_transmitter.jlink",
+        )):
+            with self.subTest(name=name):
+                output = self.root / str(index)
+                output.mkdir()
+                existing = output / name
+                existing.write_bytes(b"previous evidence")
+                args = argparse.Namespace(
+                    receiver_elf=self.inputs[0], transmitter_elf=self.inputs[1],
+                    output_dir=output,
+                )
+                with patch.object(ctt_two_node_hil, "require_symbols", return_value={}):
+                    with self.assertRaises((SystemExit, FileExistsError)):
+                        ctt_two_node_hil.generate(args)
+                self.assertEqual(existing.read_bytes(), b"previous evidence")
+                self.assertEqual(list(output.iterdir()), [existing])
+
+    def test_generate_refuses_input_alias_and_dangling_symlink(self) -> None:
+        for index, kind in enumerate(("symlink", "hardlink", "dangling")):
+            with self.subTest(kind=kind):
+                output = self.root / str(index)
+                output.mkdir()
+                destination = output / "manifest.json"
+                target = self.root / "missing" if kind == "dangling" else self.inputs[0]
+                if kind == "hardlink":
+                    os.link(target, destination)
+                else:
+                    destination.symlink_to(target)
+                args = argparse.Namespace(
+                    receiver_elf=self.inputs[0], transmitter_elf=self.inputs[1],
+                    output_dir=output,
+                )
+                with patch.object(ctt_two_node_hil, "require_symbols") as symbols:
+                    with self.assertRaises((SystemExit, FileExistsError)):
+                        ctt_two_node_hil.generate(args)
+                    symbols.assert_not_called()
+                self.assertEqual(self.inputs[0].read_bytes(), self.blobs[0])
+                self.assertFalse((self.root / "missing").exists())
+
+    def test_fresh_bundle_is_complete_and_private(self) -> None:
+        output = self.root / "new parent" / "bundle"
+        args = argparse.Namespace(
+            receiver_elf=self.inputs[0], transmitter_elf=self.inputs[1],
+            output_dir=output,
+        )
+        previous = os.umask(0o022)
+        try:
+            with patch.object(ctt_two_node_hil, "require_symbols", side_effect=[
+                {"s_ctt": {"address": 0x20000000, "size": 32}},
+                {"ctt_tx_diag_state": {"address": 0x20000100, "size": 44}},
+            ]):
+                ctt_two_node_hil.generate(args)
+        finally:
+            os.umask(previous)
+        self.assertEqual(output.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(output.parent.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(len(list(output.iterdir())), 3)
+        for path in output.iterdir():
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        manifest = json.loads((output / "manifest.json").read_text())
+        self.assertEqual(manifest["receiver"]["elf_sha256"], ctt_two_node_hil.sha256(self.inputs[0]))
+        self.assertIn("savebin ctt_receiver_s_ctt.bin", (output / "read_receiver.jlink").read_text())
+
+
 def main() -> None:
     read_script = ctt_two_node_hil.savebin_script(
         {
@@ -136,3 +253,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    unittest.main()
