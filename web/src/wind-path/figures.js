@@ -235,24 +235,32 @@ function drawTrack(map, segments, minutes) {
 }
 
 /* ── 1. the fixes, and the path between them ───────────────────────────────── */
+/* The fixes are drawn from the start; the reconstructed path draws itself in through
+ * them, in flight time, each time the figure scrolls into view. */
 async function replay(host, signal) {
   const [flight, coast] = await Promise.all([load('flight.json'), load('coast-atlantic.json')]);
   if (signal.aborted) return;
-  const fixes = flight.fixes.filter(f => f[3]), track = flight.track.map(([, lat, lon]) => [lat, lon]);
+  const fixes = flight.fixes.filter(f => f[3]), track = flight.track, end = track.at(-1)[0];
   const first = fixes[0], last = fixes.at(-1);
   host.innerHTML = `${heading('Stratolink 3', 'May 17 to 29, 2026', false)}
-    <div class="capture-tabs" role="group" aria-label="Show"><button type="button" data-show="fixes" aria-pressed="true">GPS fixes</button><button type="button" data-show="path" aria-pressed="false">Reconstructed path</button></div>
     <div class="chart-legend">${key('GPS fix', INK, 'dot')}${key('Reconstructed path', RED)}</div>
     <div class="fleet-map-stage"></div>`;
   const map = createMap(FLIGHT_VIEW, `Stratolink 3’s flight from San Francisco to Spain: the ${fixes.length} GPS fixes received, with a long stretch over the Atlantic that has none, and the path the dashboard reconstructs through them.`);
   host.querySelector('.fleet-map-stage').prepend(map.canvas);
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  let reveal = 0, raf = 0;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)'), DURATION = 4500;
+  let minutes = reduced.matches ? end : 0, raf = 0;
   function draw() {
     if (!map.width) return;
     map.base(coast);
-    if (reveal > 0) map.line(track, { color: RED, width: 2, end: Math.max(2, Math.ceil(reveal * track.length)) });
+    const n = track.findIndex(p => p[0] > minutes), k = n < 0 ? track.length : n, pts = track.slice(0, k).map(([, lat, lon]) => [lat, lon]);
+    let head;
+    if (n > 0) {
+      const [ta, la, oa] = track[n - 1], [tb, lb, ob] = track[n], f = (minutes - ta) / (tb - ta);
+      head = [lerp(la, lb, f), lerp(oa, ob, f)]; pts.push(head);
+    }
+    if (pts.length > 1) map.line(pts, { color: RED, width: 2 });
     for (const [, lat, lon] of fixes) map.dot(lat, lon, 3.2, INK, CREAM, 1);
+    if (head) map.dot(head[0], head[1], 4, RED, CREAM, 1.2);
     const label = (fix, text, dx, dy) => {
       const [x, y] = map.point(fix[1], fix[2]), ctx = map.ctx;
       ctx.font = '11px Helvetica, Arial, sans-serif'; ctx.textAlign = dx < 0 ? 'right' : 'left'; ctx.lineJoin = 'round';
@@ -261,17 +269,16 @@ async function replay(host, signal) {
     label(first, 'Launch, May 17', 9, -6);
     label(last, 'Last fix, May 29', -9, 18);
   }
-  function show(which) {
-    host.querySelectorAll('[data-show]').forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.show === which)));
+  function animate() {
     cancelAnimationFrame(raf);
-    if (which !== 'path') { reveal = 0; draw(); return; }
-    if (reduced.matches) { reveal = 1; draw(); return; }
+    if (reduced.matches) { minutes = end; draw(); return; }
     const start = performance.now();
-    const step = now => { reveal = clamp((now - start) / 1600, 0, 1); draw(); if (reveal < 1) raf = requestAnimationFrame(step); };
+    const step = now => { minutes = clamp((now - start) / DURATION, 0, 1) * end; draw(); if (minutes < end) raf = requestAnimationFrame(step); };
     raf = requestAnimationFrame(step);
   }
-  host.querySelectorAll('[data-show]').forEach(button => button.onclick = () => show(button.dataset.show));
-  signal.addEventListener('abort', () => cancelAnimationFrame(raf), { once: true });
+  const observer = new IntersectionObserver(entries => { if (entries[0].isIntersecting) animate(); }, { threshold: .5 });
+  observer.observe(host);
+  signal.addEventListener('abort', () => { observer.disconnect(); cancelAnimationFrame(raf); }, { once: true });
   observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
 }
 
