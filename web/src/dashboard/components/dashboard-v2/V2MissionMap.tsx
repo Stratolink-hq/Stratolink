@@ -178,9 +178,9 @@ interface V2MissionMapProps {
      *  the window at all zooms; the globe simply centers higher. The visible
      *  lift is ~half this value. 0 = canvas fills its window exactly. */
     liftPx?: number;
-    /** Zoom used for the wide "world-scale" default view — initial mount and the
-     *  auto-fit onto the active balloon. Mobile passes a lower value to load a bit
-     *  more zoomed out. Defaults to 2.5. */
+    /** Zoom used for the default view — initial mount and the auto-fit onto the
+     *  active balloon's recent position. Mobile passes a lower value to load a bit
+     *  more zoomed out. Defaults to 7 (a regional view, a few hundred km across). */
     wideZoom?: number;
 }
 
@@ -237,7 +237,7 @@ export default function V2MissionMap({
     terminatorDate = null,
     terminatorScrubbing = false,
     liftPx = 0,
-    wideZoom = 2.5,
+    wideZoom = 7,
 }: V2MissionMapProps) {
     const globeStage = useGlobePortal();
     mark('v2render');
@@ -499,7 +499,7 @@ export default function V2MissionMap({
                 map.fitBounds([[minLon, minLat], [maxLon, maxLat]] as LngLatBoundsLike, {
                     padding: pad(60),
                     duration: fitDuration,
-                    maxZoom: 5,
+                    maxZoom: wideZoom,   /* a tightly clustered fleet lands at the same regional zoom as a single balloon */
                 });
             }
             fittedActiveRef.current = fitKey;

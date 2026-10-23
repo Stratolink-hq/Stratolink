@@ -991,7 +991,8 @@ function MapColumn({
                 divergence={forecast.divergence}
                 colorScheme={colorScheme}
                 liftPx={globeStage === 'standalone' && isMobile ? 60 : 0}
-                wideZoom={isMobile ? 0.8 : 1.5}
+                /* Land on the balloon's recent position with some focus (a few hundred km across), not the whole globe. */
+                wideZoom={isMobile ? 6 : 7}
                 pickPath={pickPath}
                 onPickTime={onPickTime}
             /></Suspense>
