@@ -14,8 +14,10 @@
  * plan too, so the compute step reports it and exits clean. Nothing here touches
  * NOAA: the cubes are the scheduled run's, only the integration is redone.
  *
- * Usage:  npx tsx scripts/recompute_forecast.ts <deviceId> [--dry]
- *   --dry → decide and print, download nothing, write nothing
+ * Usage:  npx tsx scripts/recompute_forecast.ts <deviceId> [--dry] [--force]
+ *   --dry   → decide and print, download nothing, write nothing
+ *   --force → (or FORCE=true) rebuild even when the stored forecast already
+ *             starts from the newest fix; the cube rules still apply
  * Env: NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY,
  *      BLOB_READ_WRITE_TOKEN (required: the cubes and the stored forecast live there),
  *      WIND_CUBE_DIR (default .windcube/cubes), FORECAST_PLAN, FORECAST_MANIFEST.
@@ -142,7 +144,7 @@ function writePlanFiles(decision: RecomputeDecision, device: DeviceRow | null, n
         generated_at: new Date(nowMs).toISOString(),
         config: { horizon_h: cfg.horizonH, dead_reckon_cap_h: cfg.deadReckonCapH, freeze_margin_h: cfg.freezeMarginH },
         requested_device: decision.device_id,
-        force: false,
+        force: Boolean(decision.reason.startsWith('forced')),
         devices: [{
             device_id: decision.device_id,
             action: decision.action,
@@ -175,7 +177,8 @@ function writePlanFiles(decision: RecomputeDecision, device: DeviceRow | null, n
 async function main(): Promise<void> {
     const args = process.argv.slice(2).filter(Boolean);
     const dry = args.includes('--dry');
-    const ids = args.filter((a) => a !== '--dry');
+    const force = args.includes('--force') || /^(1|true)$/i.test(process.env.FORCE ?? '');
+    const ids = args.filter((a) => a !== '--dry' && a !== '--force');
     if (ids.length !== 1 || ids[0].startsWith('-') || !/^[a-zA-Z0-9_-]{1,80}$/.test(ids[0])) {
         throw new Error('Invalid forecast device argument (exactly one device id is required)');
     }
@@ -204,14 +207,14 @@ async function main(): Promise<void> {
         }
         stored = storedForecastSummary(await readStoredForecast(id));
         const anyCubes = { cube_generated_at: null, t0Ms: -Infinity, tEndMs: Infinity, origin_fix_utc: null, recon_end_ms: null };
-        const early = decideRecompute({ deviceId: id, status: device.status, connected, newestFixUtc, nFixes, stored, cubes: anyCubes }, nowMs);
+        const early = decideRecompute({ deviceId: id, status: device.status, connected, newestFixUtc, nFixes, stored, cubes: anyCubes, force }, nowMs);
         if (early.action === 'build') {
             setManifest = await readCubeSetManifest(id);
             if (setManifest) cubes = await fetchCubeSet(id, setManifest, dry);
         }
     }
 
-    const decision = decideRecompute({ deviceId: id, status: device?.status ?? null, connected, newestFixUtc, nFixes, stored, cubes }, nowMs);
+    const decision = decideRecompute({ deviceId: id, status: device?.status ?? null, connected, newestFixUtc, nFixes, stored, cubes, force }, nowMs);
     console.log(`  ${id}: ${decision.action.toUpperCase()} — ${decision.reason}`);
     if (process.env.GITHUB_STEP_SUMMARY) {
         appendFileSync(process.env.GITHUB_STEP_SUMMARY, `**${id}: ${decision.action}** — ${decision.reason}\n\n`);

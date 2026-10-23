@@ -411,6 +411,8 @@ next ingest.
   ```bash
   gh workflow run forecast-recompute.yml -f device=stratolink-1
   ```
+  (`-f force=true` rebuilds from the current cube set even when the stored
+  forecast already starts from the newest fix)
   or the dispatch itself, `gh api repos/Stratolink-hq/Stratolink/dispatches -f event_type=new-fix -f 'client_payload[device]=stratolink-1'`
   (default branch only). Its job summary says why a run was skipped.
 - **Reconstruction caches are keyed by fixes + `ALGO_VERSION`, not by cube.** After

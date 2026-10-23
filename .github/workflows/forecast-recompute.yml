@@ -17,6 +17,10 @@ on:
       device:
         description: 'Device to recompute (one id)'
         required: true
+      force:
+        description: 'Rebuild from the current cube set even when the stored forecast already starts from the newest fix'
+        type: boolean
+        default: false
 
 # One run per device at a time; a burst of fixes keeps only the newest.
 concurrency:
@@ -35,6 +39,7 @@ jobs:
         working-directory: web
     env:
       DEVICE: ${{ inputs.device || github.event.client_payload.device }}
+      FORCE: ${{ inputs.force }}
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}

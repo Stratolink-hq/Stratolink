@@ -255,6 +255,12 @@ test('recompute skips when the stored forecast already starts from the newest fi
   /* Sub-second timestamp jitter between the two sources still counts as the same fix. */
   const jitter = new Date(now - 0.3 * H + 400).toISOString();
   assert.equal(decideRecompute(recomputeInput({ stored: { generated_at: at(0.1), last_fix_utc: jitter, cube_generated_at: null } }), now).action, 'skip');
+  /* Forced: rebuilt from the current set anyway — but never from a missing or stale set. */
+  const forced = decideRecompute(recomputeInput({ stored: { generated_at: at(0.1), last_fix_utc: at(0.3), cube_generated_at: at(3.5) }, force: true }), now);
+  assert.equal(forced.action, 'build');
+  assert.match(forced.reason, /^forced rebuild/);
+  assert.equal(decideRecompute(recomputeInput({ cubes: null, force: true }), now).action, 'skip');
+  assert.equal(decideRecompute(recomputeInput({ status: 'landed', force: true }), now).action, 'skip');
 });
 
 test('recompute skips devices that are not flying, not connected, or have no fix', () => {

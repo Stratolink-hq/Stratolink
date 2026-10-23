@@ -50,6 +50,9 @@ export type RecomputeInput = {
     stored: StoredForecastSummary | null;
     /** The device's cube set in Blob, or null when there is none (or no forecast cube). */
     cubes: CubeSetSummary | null;
+    /** Operator override: rebuild from the current set even when the stored
+     *  forecast already starts from the newest fix. Every cube rule still applies. */
+    force?: boolean;
 };
 
 export type RecomputeDecision = {
@@ -93,7 +96,7 @@ export function decideRecompute(d: RecomputeInput, nowMs = Date.now()): Recomput
     }
 
     const storedFixMs = parseMs(d.stored?.last_fix_utc);
-    if (storedFixMs != null && Math.abs(storedFixMs - fixMs) < 1000) {
+    if (!d.force && storedFixMs != null && Math.abs(storedFixMs - fixMs) < 1000) {
         return {
             ...base, action: 'skip',
             reason: `stored forecast (${d.stored?.generated_at}) already starts from the newest fix ${d.newestFixUtc}`,
@@ -143,7 +146,7 @@ export function decideRecompute(d: RecomputeInput, nowMs = Date.now()): Recomput
     const behindH = storedFixMs == null ? null : (fixMs - storedFixMs) / HOUR_MS;
     return {
         ...base, action: 'build',
-        reason: (behindH == null ? 'no stored forecast yet' : `stored forecast starts ${fmtH(behindH)} behind the newest fix`)
+        reason: (d.force ? 'forced rebuild' : behindH == null ? 'no stored forecast yet' : `stored forecast starts ${fmtH(behindH)} behind the newest fix`)
             + `; cubes built ${d.cubes.cube_generated_at ?? 'at an unknown time'} cover +${fmtH(aheadH)}`
             + (aheadH < HORIZON_H ? ` (short of the ${HORIZON_H} h horizon — forecast will be coverage-limited)` : ''),
     };
