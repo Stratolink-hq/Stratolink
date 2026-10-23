@@ -8,7 +8,9 @@ The source is Teddy Warner's launch photograph, supplied as `/Users/twarn/Downlo
 | --- | --- | --- |
 | `public/assets/launch/source.jpg` | 2560 × 1440 | Source photograph for the layer compiler and placeholder |
 | `public/assets/launch/sky.webp` | 2560 × 1440, RGB | Served sky plate: `sky.png`'s colour with the original photograph's detail in clear sky (`scripts/prepare-launch-sky.py`) |
-| `public/assets/launch/social-card.jpg` | 1200 × 630 | Link-preview image (`og:image`, `twitter:image`): graded crop of the original photograph with the wordmark |
+| `public/assets/launch/social-card.jpg` | 1200 × 630 | Still link-preview card: graded crop of the original photograph with the wordmark; frame 0 of the loop |
+| `public/assets/launch/social-card-loop.gif` | 1200 × 630, 223 frames | Link-preview image (`og:image`, `twitter:image`): the balloon rises out of frame, then the next rises from the clouds into place (8.9 s loop) |
+| `public/assets/launch/social-card-loop.mp4` | 1200 × 630, H.264 | The same loop as `og:video`; iMessage autoplays it muted and looped |
 | `public/assets/launch/sky.png` | 1672 × 941, RGB | Clear sky plate inpainted with the built-in image generator; fills behind the moving city, clouds and balloon |
 | `public/assets/launch/city-clouds.png` | 1672 × 941, RGBA | Generated alpha mask for the original skyline, clouds and foreground palm |
 | `public/assets/launch/balloon.png` | 1672 × 941, RGBA | Generated alpha mask for the original balloon, tether and payload |
