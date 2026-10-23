@@ -34,7 +34,7 @@ function load(file) {
 
 /* ── map on canvas ──────────────────────────────────────────────────────────── */
 const GAP_VIEW = { lon0: -112, lon1: 0, lat0: 14, lat1: 56 };
-const FLIGHT_VIEW = { lon0: -128, lon1: 4, lat0: 18, lat1: 57 };
+const FLIGHT_VIEW = { lon0: -128, lon1: 2, lat0: 23, lat1: 53 };
 const WIDE_VIEW = { lon0: -125, lon1: 35, lat0: 8, lat1: 68 };
 const WORLD = { lon0: -30, lon1: 330, lat0: -12, lat1: 78, wrap: true };
 
@@ -236,7 +236,7 @@ function drawTrack(map, segments, minutes) {
 
 /* ── 1. the fixes, and the path between them ───────────────────────────────── */
 /* The fixes are drawn from the start; the reconstructed path draws itself in through
- * them, in flight time, each time the figure scrolls into view. */
+ * them, in flight time, holds, and starts again, while the figure is on screen. */
 async function replay(host, signal) {
   const [flight, coast] = await Promise.all([load('flight.json'), load('coast-atlantic.json')]);
   if (signal.aborted) return;
@@ -247,7 +247,7 @@ async function replay(host, signal) {
     <div class="fleet-map-stage"></div>`;
   const map = createMap(FLIGHT_VIEW, `Stratolink 3’s flight from San Francisco to Spain: the ${fixes.length} GPS fixes received, with a long stretch over the Atlantic that has none, and the path the dashboard reconstructs through them.`);
   host.querySelector('.fleet-map-stage').prepend(map.canvas);
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)'), DURATION = 4500;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)'), DURATION = 4500, HOLD = 2000;
   let minutes = reduced.matches ? end : 0, raf = 0;
   function draw() {
     if (!map.width) return;
@@ -269,15 +269,28 @@ async function replay(host, signal) {
     label(first, 'Launch, May 17', 9, -6);
     label(last, 'Last fix, May 29', -9, 18);
   }
-  function animate() {
-    cancelAnimationFrame(raf);
-    if (reduced.matches) { minutes = end; draw(); return; }
-    const start = performance.now();
-    const step = now => { minutes = clamp((now - start) / DURATION, 0, 1) * end; draw(); if (minutes < end) raf = requestAnimationFrame(step); };
+  /* elapsed time in the draw-and-hold cycle; it only advances while the figure is visible */
+  let visible = false, elapsed = 0, prev = 0;
+  function step(now) {
+    raf = 0;
+    if (!visible || document.hidden || reduced.matches) return;
+    if (prev) elapsed = (elapsed + Math.min(now - prev, 100)) % (DURATION + HOLD);
+    prev = now; minutes = Math.min(elapsed / DURATION, 1) * end; draw();
     raf = requestAnimationFrame(step);
   }
-  const observer = new IntersectionObserver(entries => { if (entries[0].isIntersecting) animate(); }, { threshold: .5 });
+  function update() {
+    prev = 0;
+    if (reduced.matches) { cancelAnimationFrame(raf); raf = 0; minutes = end; draw(); return; }
+    if (visible && !document.hidden && !raf) raf = requestAnimationFrame(step);
+  }
+  const observer = new IntersectionObserver(entries => {
+    const was = visible; visible = entries[0].isIntersecting;
+    if (visible && !was) elapsed = 0;
+    update();
+  }, { threshold: .3 });
   observer.observe(host);
+  document.addEventListener('visibilitychange', update, { signal });
+  reduced.addEventListener('change', update, { signal });
   signal.addEventListener('abort', () => { observer.disconnect(); cancelAnimationFrame(raf); }, { once: true });
   observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
 }
