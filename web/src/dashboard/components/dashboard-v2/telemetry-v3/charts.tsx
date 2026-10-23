@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCaretDown, faCaretUp, faMinus } from '@fortawesome/free-solid-svg-icons';
 import type { FlightSeries } from '@/lib/telemetry/flightSeries';
@@ -109,6 +109,101 @@ export function scrubIndex(pts: { src: number }[], times: number[], scrubT: numb
     return best;
 }
 
+/** pts index whose plotted x is nearest a pointer's clientX. */
+function nearestIdxAt(clientX: number, rect: DOMRect, n: number, X: (i: number) => number, W: number): number {
+    const targetX = ((clientX - rect.left) / rect.width) * W;
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < n; i++) {
+        const d = Math.abs(X(i) - targetX);
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+}
+
+/** How long a finger must rest on a chart before dragging scrubs it. */
+const TOUCH_HOLD_MS = 200;
+/** Movement (px) during the hold that reads as a scroll instead. */
+const TOUCH_SLOP_PX = 8;
+
+/**
+ * Touch hold-and-drag scrubbing — the finger becomes the hover cursor. A press
+ * held still for TOUCH_HOLD_MS engages it; from then on the page can't scroll
+ * and the cursor follows the finger until it lifts. A quick swipe still scrolls
+ * the drawer, since it moves past the slop before the hold engages.
+ *
+ * Native listeners, not React props: React's touch handlers are passive, and
+ * stopping the scroll mid-gesture needs preventDefault on touchmove.
+ */
+function useTouchScrub(onScrub: (clientX: number, rect: DOMRect) => void, onEnd: () => void) {
+    /* A callback ref (state), so the listeners attach whenever the chart's SVG
+     * actually mounts — it can appear later than the component does. */
+    const [el, setEl] = useState<SVGSVGElement | null>(null);
+    /* Latest callbacks — they close over per-render axis state. */
+    const cb = useRef({ onScrub, onEnd });
+    cb.current = { onScrub, onEnd };
+
+    useEffect(() => {
+        if (!el) return;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        let scrubbing = false;
+        let x0 = 0;
+        let y0 = 0;
+        let lastX = 0;
+        const clear = () => {
+            if (timer) clearTimeout(timer);
+            timer = null;
+        };
+        const start = (e: TouchEvent) => {
+            if (e.touches.length !== 1) return;
+            const t = e.touches[0];
+            x0 = lastX = t.clientX;
+            y0 = t.clientY;
+            clear();
+            timer = setTimeout(() => {
+                timer = null;
+                scrubbing = true;
+                cb.current.onScrub(lastX, el.getBoundingClientRect());
+            }, TOUCH_HOLD_MS);
+        };
+        const move = (e: TouchEvent) => {
+            const t = e.touches[0];
+            if (!t) return;
+            lastX = t.clientX;
+            if (scrubbing) {
+                if (e.cancelable) e.preventDefault();
+                cb.current.onScrub(t.clientX, el.getBoundingClientRect());
+            } else if (timer && Math.hypot(t.clientX - x0, t.clientY - y0) > TOUCH_SLOP_PX) {
+                clear();
+            }
+        };
+        const end = (e: TouchEvent) => {
+            clear();
+            if (!scrubbing) return;
+            scrubbing = false;
+            /* Swallow the click a scrub would otherwise end in (click-to-pick). */
+            if (e.cancelable) e.preventDefault();
+            cb.current.onEnd();
+        };
+        /* Android opens a context menu on long-press. */
+        const menu = (e: Event) => e.preventDefault();
+        el.addEventListener('touchstart', start, { passive: true });
+        el.addEventListener('touchmove', move, { passive: false });
+        el.addEventListener('touchend', end, { passive: false });
+        el.addEventListener('touchcancel', end, { passive: false });
+        el.addEventListener('contextmenu', menu);
+        return () => {
+            clear();
+            el.removeEventListener('touchstart', start);
+            el.removeEventListener('touchmove', move);
+            el.removeEventListener('touchend', end);
+            el.removeEventListener('touchcancel', end);
+            el.removeEventListener('contextmenu', menu);
+        };
+    }, [el]);
+    return setEl;
+}
+
 function Tip({ xFrac, lines }: { xFrac: number; lines: React.ReactNode }) {
     const flip = xFrac > 0.6;
     return (
@@ -208,6 +303,7 @@ export function LineTrend({
     /* Time-warped axis (gaps detected, compressed, broken) — shared with the
      * other timeline charts. */
     const { pts, segments, X, gapMarks } = useMemo(() => buildWarpedAxis(times, W, 90), [times]);
+    const scrubRef = useTouchScrub((x, r) => setHover(nearestIdxAt(x, r, pts.length, X, W)), () => setHover(null));
 
     /* Downsampled index whose source time is closest to the scrub time. */
     const scrubIdx = useMemo(() => {
@@ -259,32 +355,20 @@ export function LineTrend({
     const faint = emphasis === 'low';
     const lineCol = faint ? 'var(--t-text-4)' : 'var(--t-text-3)';
 
-    /* Downsampled index whose plotted x is nearest the pointer — shared by the
-     * hover cursor and click-to-scrub. */
-    const nearestIdxAt = (clientX: number, rect: DOMRect) => {
-        const targetX = ((clientX - rect.left) / rect.width) * W;
-        let best = 0;
-        let bestD = Infinity;
-        for (let i = 0; i < pts.length; i++) {
-            const d = Math.abs(X(i) - targetX);
-            if (d < bestD) { bestD = d; best = i; }
-        }
-        return best;
-    };
-
     return (
-        <div style={{ position: 'relative', width: '100%' }}>
+        <div className="t-chart" style={{ position: 'relative', width: '100%' }}>
             <svg
+                ref={scrubRef}
                 viewBox={`0 0 ${W} ${H}`}
                 preserveAspectRatio="none"
                 style={{ width: '100%', height: H, display: 'block', cursor: onPickTime ? 'crosshair' : undefined }}
                 onMouseLeave={() => setHover(null)}
                 onMouseMove={(e) => {
                     /* Map the cursor to the time-positioned sample nearest it. */
-                    setHover(nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect()));
+                    setHover(nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect(), pts.length, X, W));
                 }}
                 onClick={onPickTime ? (e) => {
-                    const idx = nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect());
+                    const idx = nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect(), pts.length, X, W);
                     const src = pts[idx]?.src;
                     if (src != null && Number.isFinite(times[src])) onPickTime(times[src]);
                 } : undefined}
@@ -348,6 +432,7 @@ export function PowerOverlay({ flight, height = 104, showBand = true, scrubT = n
     const W = 300;
     const H = height;
     const { pts, segments, X, gapMarks } = useMemo(() => buildWarpedAxis(flight.times, W, 90), [flight.times]);
+    const scrubRef = useTouchScrub((x, r) => setHover(nearestIdxAt(x, r, pts.length, X, W)), () => setHover(null));
     const scrubIdx = scrubIndex(pts, flight.times, scrubT);
     const solarAt = (i: number) => flight.solar[pts[i].src] ?? 0;
     const battAt = (i: number) => flight.batt[pts[i].src] ?? 3.3;
@@ -386,22 +471,15 @@ export function PowerOverlay({ flight, height = 104, showBand = true, scrubT = n
         .filter((c): c is { x: number; w: number } => c !== null);
 
     return (
-        <div style={{ position: 'relative', width: '100%' }}>
+        <div className="t-chart" style={{ position: 'relative', width: '100%' }}>
             <svg
+                ref={scrubRef}
                 viewBox={`0 0 ${W} ${H}`}
                 preserveAspectRatio="none"
                 style={{ width: '100%', height: H, display: 'block' }}
                 onMouseLeave={() => setHover(null)}
                 onMouseMove={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const targetX = ((e.clientX - r.left) / r.width) * W;
-                    let best = 0;
-                    let bestD = Infinity;
-                    for (let i = 0; i < pts.length; i++) {
-                        const d = Math.abs(X(i) - targetX);
-                        if (d < bestD) { bestD = d; best = i; }
-                    }
-                    setHover(best);
+                    setHover(nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect(), pts.length, X, W));
                 }}
             >
                 {nightCells.map((c, i) => (
@@ -453,6 +531,7 @@ export function StateStrip({ sats, times, height = 50, scrubT = null }: { sats: 
     const W = 300;
     const H = height;
     const { pts, segments, X, gapMarks } = useMemo(() => buildWarpedAxis(times, W, 76), [times]);
+    const scrubRef = useTouchScrub((x, r) => setHover(nearestIdxAt(x, r, pts.length, X, W)), () => setHover(null));
     const scrubIdx = scrubIndex(pts, times, scrubT);
     const valAt = (i: number) => sats[pts[i].src] ?? 0;
     const stateOf = (v: number) => (v <= 0 ? 'critical' : v < 4 ? 'warn' : 'lock');
@@ -467,22 +546,15 @@ export function StateStrip({ sats, times, height = 50, scrubT = null }: { sats: 
     };
 
     return (
-        <div style={{ position: 'relative', width: '100%' }}>
+        <div className="t-chart" style={{ position: 'relative', width: '100%' }}>
             <svg
+                ref={scrubRef}
                 viewBox={`0 0 ${W} ${H}`}
                 preserveAspectRatio="none"
                 style={{ width: '100%', height: H, display: 'block' }}
                 onMouseLeave={() => setHover(null)}
                 onMouseMove={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const targetX = ((e.clientX - r.left) / r.width) * W;
-                    let best = 0;
-                    let bestD = Infinity;
-                    for (let i = 0; i < pts.length; i++) {
-                        const d = Math.abs(X(i) - targetX);
-                        if (d < bestD) { bestD = d; best = i; }
-                    }
-                    setHover(best);
+                    setHover(nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect(), pts.length, X, W));
                 }}
             >
                 {pts.map((_, i) => {
@@ -597,6 +669,7 @@ export function SignalTrendRow({
     const numeric = useMemo(() => series.filter((v): v is number => v != null), [series]);
     const tail = useMemo(() => numeric.slice(-recent), [numeric, recent]);
     const { pts, segments, X, gapMarks } = useMemo(() => buildWarpedAxis(times, W, 90), [times]);
+    const scrubRef = useTouchScrub((x, r) => setHover(nearestIdxAt(x, r, pts.length, X, W)), () => setHover(null));
     const scrubIdx = scrubIndex(pts, times, scrubT);
     if (numeric.length < 2 || pts.length < 2) {
         return <div className="mono" style={{ fontSize: 10, color: 'var(--t-text-3)', padding: '8px 0' }}>-</div>;
@@ -649,22 +722,15 @@ export function SignalTrendRow({
                     </span>
                 </div>
             </div>
-            <div style={{ position: 'relative', width: '100%' }}>
+            <div className="t-chart" style={{ position: 'relative', width: '100%' }}>
                 <svg
+                    ref={scrubRef}
                     viewBox={`0 0 ${W} ${H}`}
                     preserveAspectRatio="none"
                     style={{ width: '100%', height: H, display: 'block' }}
                     onMouseLeave={() => setHover(null)}
                     onMouseMove={(e) => {
-                        const r = e.currentTarget.getBoundingClientRect();
-                        const targetX = ((e.clientX - r.left) / r.width) * W;
-                        let best = 0;
-                        let bestD = Infinity;
-                        for (let i = 0; i < pts.length; i++) {
-                            const d = Math.abs(X(i) - targetX);
-                            if (d < bestD) { bestD = d; best = i; }
-                        }
-                        setHover(best);
+                        setHover(nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect(), pts.length, X, W));
                     }}
                 >
                     <rect x={0} y={goodTop} width={W} height={Math.max(0, goodH)} fill="var(--t-nominal-soft)" opacity="0.5" />

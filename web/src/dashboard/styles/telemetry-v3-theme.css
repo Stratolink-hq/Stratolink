@@ -183,3 +183,12 @@
 .tlm-metric:focus-visible, .tlm-chart-reset:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 1px; }
 .tlm-chart-reset { appearance: none; border: 0; background: transparent; padding: 0 2px; font-size: 10px; line-height: 1; color: var(--t-text-3); cursor: pointer; }
 .tlm-chart-reset:hover { color: var(--t-text); }
+
+/* Charts are scrubbed by press-and-drag on touch — a long press must never
+ * start a text selection, the copy/lookup callout, or a tap flash. */
+.t-chart {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
