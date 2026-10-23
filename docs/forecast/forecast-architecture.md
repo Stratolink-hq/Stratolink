@@ -342,7 +342,10 @@ one trailing dispatch — and the device's `flying` status is checked inside the
 background path, so the webhook never pays for it.
 
 **Workflow**: `repository_dispatch` only runs the workflow from the **default
-branch**; `workflow_dispatch` with a `device` input exists to test a branch.
+branch**, and GitHub does not register a new workflow file at all until it is
+on that branch (neither trigger works from a feature branch — test the two
+steps locally, see §7). `workflow_dispatch` (`device`, `force`) is the
+operator path.
 Concurrency group `forecast-recompute-{device}` with `cancel-in-progress`, so
 a burst keeps only the newest run. Node only (`npm ci`, no micromamba, no
 GRIB): ~1–2 min end to end.
@@ -414,7 +417,12 @@ next ingest.
   (`-f force=true` rebuilds from the current cube set even when the stored
   forecast already starts from the newest fix)
   or the dispatch itself, `gh api repos/Stratolink-hq/Stratolink/dispatches -f event_type=new-fix -f 'client_payload[device]=stratolink-1'`
-  (default branch only). Its job summary says why a run was skipped.
+  (default branch only). Its job summary says why a run was skipped. The same
+  two steps run locally against the live Blob set (reads the set, stores the
+  forecast exactly as the runner would):
+  ```bash
+  cd web && export WIND_CUBE_DIR=/tmp/wc/cubes FORECAST_PLAN=/tmp/wc/plan.json FORECAST_MANIFEST=/tmp/wc/manifest.json && node --env-file=.env.local --import tsx scripts/recompute_forecast.ts stratolink-1 --force && node --env-file=.env.local --import tsx scripts/compute_forecasts.ts stratolink-1
+  ```
 - **Reconstruction caches are keyed by fixes + `ALGO_VERSION`, not by cube.** After
   a reconstruction-code change bump `ALGO_VERSION` in `lib/wind/hindcastStorage.ts`
   (and `GAP_ALGO_VERSION` in `pathReconstruction.ts` for per-gap bridges), or the

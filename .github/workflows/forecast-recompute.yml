@@ -6,9 +6,11 @@ name: Forecast recompute
 # redone, so this can run for every fix (every ~20 min per balloon).
 #
 # Fired by the TTN webhook (web/server/forecastRecomputeTrigger.ts) as a
-# `repository_dispatch` of type `new-fix` with `{"device": "<id>"}`; GitHub only
-# runs repository_dispatch workflows from the DEFAULT branch. The manual
-# `workflow_dispatch` input exists for testing a branch.
+# `repository_dispatch` of type `new-fix` with `{"device": "<id>"}`. GitHub only
+# runs repository_dispatch workflows from the DEFAULT branch, and a new workflow
+# file is not registered (neither trigger works) until it is on that branch.
+# The manual `workflow_dispatch` is the operator path (`force` = rebuild from
+# the current cube set even when nothing changed).
 on:
   repository_dispatch:
     types: [new-fix]
