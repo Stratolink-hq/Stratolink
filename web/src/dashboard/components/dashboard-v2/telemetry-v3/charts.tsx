@@ -15,6 +15,9 @@ export type WarpedAxis = {
     warpX: (t: number) => number;
     /** Pixel x of each compressed-gap center (for break markers). */
     gapMarks: number[];
+    /** Raw time at a pixel x — continuous within a run, snapped to the nearer
+     *  side of a compressed gap (no time is drawn inside one). */
+    timeAtX: (x: number) => number;
 };
 
 /**
@@ -94,7 +97,22 @@ export function buildWarpedAxis(times: number[], W: number, budget = 90): Warped
     }
     const gapMarks = gaps.map((g) => warpX(g.start) + ((gapWidth / wSpan) * W) / 2);
 
-    return { pts, segments, X, warpX, gapMarks };
+    const timeAtX = (x: number): number => {
+        if (!pts.length) return times[0] ?? 0;
+        if (x <= X(0)) return times[pts[0].src];
+        for (let i = 1; i < pts.length; i++) {
+            const x1 = X(i);
+            if (x > x1) continue;
+            const x0 = X(i - 1);
+            const t0 = times[pts[i - 1].src];
+            const t1 = times[pts[i].src];
+            if (brokeBefore[i]) return x - x0 < x1 - x ? t0 : t1;
+            return x1 > x0 ? t0 + ((x - x0) / (x1 - x0)) * (t1 - t0) : t1;
+        }
+        return times[pts[pts.length - 1].src];
+    };
+
+    return { pts, segments, X, warpX, gapMarks, timeAtX };
 }
 
 /** pts index whose source time is closest to the scrub time (null if no scrub). */
@@ -121,88 +139,10 @@ function nearestIdxAt(clientX: number, rect: DOMRect, n: number, X: (i: number) 
     return best;
 }
 
-/** How long a finger must rest on a chart before dragging scrubs it. */
-const TOUCH_HOLD_MS = 200;
-/** Movement (px) during the hold that reads as a scroll instead. */
-const TOUCH_SLOP_PX = 8;
+/** Sideways travel (px) that turns a touch into a chart scrub; a touch that
+ * moves vertically first is left to scroll the page/drawer. */
+const TOUCH_SLOP_PX = 6;
 
-/**
- * Touch hold-and-drag scrubbing — the finger becomes the hover cursor. A press
- * held still for TOUCH_HOLD_MS engages it; from then on the page can't scroll
- * and the cursor follows the finger until it lifts. A quick swipe still scrolls
- * the drawer, since it moves past the slop before the hold engages.
- *
- * Native listeners, not React props: React's touch handlers are passive, and
- * stopping the scroll mid-gesture needs preventDefault on touchmove.
- */
-function useTouchScrub(onScrub: (clientX: number, rect: DOMRect) => void, onEnd: () => void) {
-    /* A callback ref (state), so the listeners attach whenever the chart's SVG
-     * actually mounts — it can appear later than the component does. */
-    const [el, setEl] = useState<SVGSVGElement | null>(null);
-    /* Latest callbacks — they close over per-render axis state. */
-    const cb = useRef({ onScrub, onEnd });
-    cb.current = { onScrub, onEnd };
-
-    useEffect(() => {
-        if (!el) return;
-        let timer: ReturnType<typeof setTimeout> | null = null;
-        let scrubbing = false;
-        let x0 = 0;
-        let y0 = 0;
-        let lastX = 0;
-        const clear = () => {
-            if (timer) clearTimeout(timer);
-            timer = null;
-        };
-        const start = (e: TouchEvent) => {
-            if (e.touches.length !== 1) return;
-            const t = e.touches[0];
-            x0 = lastX = t.clientX;
-            y0 = t.clientY;
-            clear();
-            timer = setTimeout(() => {
-                timer = null;
-                scrubbing = true;
-                cb.current.onScrub(lastX, el.getBoundingClientRect());
-            }, TOUCH_HOLD_MS);
-        };
-        const move = (e: TouchEvent) => {
-            const t = e.touches[0];
-            if (!t) return;
-            lastX = t.clientX;
-            if (scrubbing) {
-                if (e.cancelable) e.preventDefault();
-                cb.current.onScrub(t.clientX, el.getBoundingClientRect());
-            } else if (timer && Math.hypot(t.clientX - x0, t.clientY - y0) > TOUCH_SLOP_PX) {
-                clear();
-            }
-        };
-        const end = (e: TouchEvent) => {
-            clear();
-            if (!scrubbing) return;
-            scrubbing = false;
-            /* Swallow the click a scrub would otherwise end in (click-to-pick). */
-            if (e.cancelable) e.preventDefault();
-            cb.current.onEnd();
-        };
-        /* Android opens a context menu on long-press. */
-        const menu = (e: Event) => e.preventDefault();
-        el.addEventListener('touchstart', start, { passive: true });
-        el.addEventListener('touchmove', move, { passive: false });
-        el.addEventListener('touchend', end, { passive: false });
-        el.addEventListener('touchcancel', end, { passive: false });
-        el.addEventListener('contextmenu', menu);
-        return () => {
-            clear();
-            el.removeEventListener('touchstart', start);
-            el.removeEventListener('touchmove', move);
-            el.removeEventListener('touchend', end);
-            el.removeEventListener('touchcancel', end);
-            el.removeEventListener('contextmenu', menu);
-        };
-    }, [el]);
-    return setEl;
-}
 
 function Tip({ xFrac, lines }: { xFrac: number; lines: React.ReactNode }) {
     const flip = xFrac > 0.6;
@@ -281,6 +221,7 @@ export function LineTrend({
     emphasis = 'normal',
     scrubT = null,
     onPickTime,
+    onScrubbingChange,
 }: {
     series: (number | null)[];
     times: number[];
@@ -292,18 +233,36 @@ export function LineTrend({
     emphasis?: 'normal' | 'low';
     /** When set, a dot tracks this scrub time along the line. */
     scrubT?: number | null;
-    /** When set, clicking the chart scrubs to the sample nearest the cursor. */
+    /** When set, clicking or dragging along the chart scrubs to that time. */
     onPickTime?: (t: number) => void;
+    /** True while a drag on the chart is driving the scrub time. */
+    onScrubbingChange?: (active: boolean) => void;
 }) {
     const [hover, setHover] = useState<number | null>(null);
+    /* The pointer pressed on the chart. A mouse scrubs from the press; a touch
+     * stays inactive until it moves sideways, so a vertical swipe still scrolls. */
+    const dragRef = useRef<{ id: number; x0: number; y0: number; active: boolean } | null>(null);
+    /* State, not a ref: the SVG mounts only once there are enough samples. */
+    const [svgEl, setSvgEl] = useState<SVGSVGElement | null>(null);
+    useEffect(() => {
+        if (!svgEl) return;
+        /* Once a touch scrub is under way, claim the touch. Otherwise iOS hands a
+         * finger that rests before lifting to its own long-press handling: the
+         * touch never ends for the page, and the next tap is swallowed. Native and
+         * non-passive, since React's touch listeners can't preventDefault. */
+        const claim = (e: TouchEvent) => {
+            if (dragRef.current?.active && e.cancelable) e.preventDefault();
+        };
+        svgEl.addEventListener('touchmove', claim, { passive: false });
+        return () => svgEl.removeEventListener('touchmove', claim);
+    }, [svgEl]);
     const numeric = series.map((v) => (v == null ? NaN : v)).filter((v) => !Number.isNaN(v));
     const W = 300;
     const H = height;
 
     /* Time-warped axis (gaps detected, compressed, broken) — shared with the
      * other timeline charts. */
-    const { pts, segments, X, gapMarks } = useMemo(() => buildWarpedAxis(times, W, 90), [times]);
-    const scrubRef = useTouchScrub((x, r) => setHover(nearestIdxAt(x, r, pts.length, X, W)), () => setHover(null));
+    const { pts, segments, X, gapMarks, timeAtX } = useMemo(() => buildWarpedAxis(times, W, 90), [times]);
 
     /* Downsampled index whose source time is closest to the scrub time. */
     const scrubIdx = useMemo(() => {
@@ -355,23 +314,73 @@ export function LineTrend({
     const faint = emphasis === 'low';
     const lineCol = faint ? 'var(--t-text-4)' : 'var(--t-text-3)';
 
+    /* Scrub to the time under the pointer: the cursor snaps to the nearest
+     * plotted sample, while the picked time glides continuously between them. */
+    const scrubTo = (clientX: number, el: Element) => {
+        const rect = el.getBoundingClientRect();
+        setHover(nearestIdxAt(clientX, rect, pts.length, X, W));
+        const t = timeAtX(((clientX - rect.left) / rect.width) * W);
+        if (Number.isFinite(t)) onPickTime?.(t);
+    };
+    const beginScrub = (e: React.PointerEvent<SVGSVGElement>) => {
+        if (!dragRef.current) return;
+        dragRef.current.active = true;
+        /* Keep the drag once the pointer strays off the chart. */
+        e.currentTarget.setPointerCapture(e.pointerId);
+        onScrubbingChange?.(true);
+        scrubTo(e.clientX, e.currentTarget);
+    };
+    const endScrub = (pointerId: number) => {
+        const drag = dragRef.current;
+        if (drag?.id !== pointerId) return null;
+        dragRef.current = null;
+        if (drag.active) onScrubbingChange?.(false);
+        return drag;
+    };
+
     return (
         <div className="t-chart" style={{ position: 'relative', width: '100%' }}>
             <svg
-                ref={scrubRef}
+                ref={setSvgEl}
                 viewBox={`0 0 ${W} ${H}`}
                 preserveAspectRatio="none"
-                style={{ width: '100%', height: H, display: 'block', cursor: onPickTime ? 'crosshair' : undefined }}
-                onMouseLeave={() => setHover(null)}
-                onMouseMove={(e) => {
-                    /* Map the cursor to the time-positioned sample nearest it. */
-                    setHover(nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect(), pts.length, X, W));
+                style={{
+                    width: '100%', height: H, display: 'block',
+                    cursor: onPickTime ? 'crosshair' : undefined,
+                    /* Vertical swipes scroll; sideways drags reach us at once. */
+                    touchAction: onPickTime ? 'pan-y' : undefined,
                 }}
-                onClick={onPickTime ? (e) => {
-                    const idx = nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect(), pts.length, X, W);
-                    const src = pts[idx]?.src;
-                    if (src != null && Number.isFinite(times[src])) onPickTime(times[src]);
+                onPointerDown={onPickTime ? (e) => {
+                    if (e.pointerType === 'mouse' && e.button !== 0) return;
+                    dragRef.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, active: false };
+                    if (e.pointerType === 'mouse') beginScrub(e);
                 } : undefined}
+                onPointerMove={(e) => {
+                    const drag = dragRef.current;
+                    if (drag?.id === e.pointerId) {
+                        if (drag.active) scrubTo(e.clientX, e.currentTarget);
+                        else {
+                            const dx = Math.abs(e.clientX - drag.x0);
+                            if (dx > TOUCH_SLOP_PX && dx > Math.abs(e.clientY - drag.y0)) beginScrub(e);
+                        }
+                        return;
+                    }
+                    /* Plain hover: map the cursor to the sample nearest it. */
+                    if (e.pointerType === 'mouse') setHover(nearestIdxAt(e.clientX, e.currentTarget.getBoundingClientRect(), pts.length, X, W));
+                }}
+                onPointerUp={(e) => {
+                    const drag = endScrub(e.pointerId);
+                    /* A tap (no drag) jumps to the time under the finger. */
+                    if (drag && !drag.active) scrubTo(e.clientX, e.currentTarget);
+                    if (e.pointerType !== 'mouse') setHover(null);
+                }}
+                onPointerCancel={(e) => {
+                    endScrub(e.pointerId);
+                    setHover(null);
+                }}
+                onPointerLeave={() => {
+                    if (!dragRef.current) setHover(null);
+                }}
             >
                 {band &&
                     (() => {
@@ -432,7 +441,6 @@ export function PowerOverlay({ flight, height = 104, showBand = true, scrubT = n
     const W = 300;
     const H = height;
     const { pts, segments, X, gapMarks } = useMemo(() => buildWarpedAxis(flight.times, W, 90), [flight.times]);
-    const scrubRef = useTouchScrub((x, r) => setHover(nearestIdxAt(x, r, pts.length, X, W)), () => setHover(null));
     const scrubIdx = scrubIndex(pts, flight.times, scrubT);
     const solarAt = (i: number) => flight.solar[pts[i].src] ?? 0;
     const battAt = (i: number) => flight.batt[pts[i].src] ?? 3.3;
@@ -473,7 +481,6 @@ export function PowerOverlay({ flight, height = 104, showBand = true, scrubT = n
     return (
         <div className="t-chart" style={{ position: 'relative', width: '100%' }}>
             <svg
-                ref={scrubRef}
                 viewBox={`0 0 ${W} ${H}`}
                 preserveAspectRatio="none"
                 style={{ width: '100%', height: H, display: 'block' }}
@@ -531,7 +538,6 @@ export function StateStrip({ sats, times, height = 50, scrubT = null }: { sats: 
     const W = 300;
     const H = height;
     const { pts, segments, X, gapMarks } = useMemo(() => buildWarpedAxis(times, W, 76), [times]);
-    const scrubRef = useTouchScrub((x, r) => setHover(nearestIdxAt(x, r, pts.length, X, W)), () => setHover(null));
     const scrubIdx = scrubIndex(pts, times, scrubT);
     const valAt = (i: number) => sats[pts[i].src] ?? 0;
     const stateOf = (v: number) => (v <= 0 ? 'critical' : v < 4 ? 'warn' : 'lock');
@@ -548,7 +554,6 @@ export function StateStrip({ sats, times, height = 50, scrubT = null }: { sats: 
     return (
         <div className="t-chart" style={{ position: 'relative', width: '100%' }}>
             <svg
-                ref={scrubRef}
                 viewBox={`0 0 ${W} ${H}`}
                 preserveAspectRatio="none"
                 style={{ width: '100%', height: H, display: 'block' }}
@@ -669,7 +674,6 @@ export function SignalTrendRow({
     const numeric = useMemo(() => series.filter((v): v is number => v != null), [series]);
     const tail = useMemo(() => numeric.slice(-recent), [numeric, recent]);
     const { pts, segments, X, gapMarks } = useMemo(() => buildWarpedAxis(times, W, 90), [times]);
-    const scrubRef = useTouchScrub((x, r) => setHover(nearestIdxAt(x, r, pts.length, X, W)), () => setHover(null));
     const scrubIdx = scrubIndex(pts, times, scrubT);
     if (numeric.length < 2 || pts.length < 2) {
         return <div className="mono" style={{ fontSize: 10, color: 'var(--t-text-3)', padding: '8px 0' }}>-</div>;
@@ -724,7 +728,6 @@ export function SignalTrendRow({
             </div>
             <div className="t-chart" style={{ position: 'relative', width: '100%' }}>
                 <svg
-                    ref={scrubRef}
                     viewBox={`0 0 ${W} ${H}`}
                     preserveAspectRatio="none"
                     style={{ width: '100%', height: H, display: 'block' }}

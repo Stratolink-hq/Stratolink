@@ -184,7 +184,7 @@
 .tlm-chart-reset { appearance: none; border: 0; background: transparent; padding: 0 2px; font-size: 10px; line-height: 1; color: var(--t-text-3); cursor: pointer; }
 .tlm-chart-reset:hover { color: var(--t-text); }
 
-/* Charts are scrubbed by press-and-drag on touch — a long press must never
+/* Charts are scrubbed by dragging along them — a press or drag must never
  * start a text selection, the copy/lookup callout, or a tap flash. */
 .t-chart {
   -webkit-user-select: none;
