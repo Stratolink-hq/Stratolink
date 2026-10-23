@@ -23,6 +23,7 @@ export function writeDocsPages() {
   <link id="site-favicon" rel="icon" href="/assets/favicon/globe.png" type="image/png" sizes="64x64">
   <link rel="apple-touch-icon" href="/assets/favicon/apple-touch-icon.png">
   <script type="module" src="/src/favicon.js"></script>
+  <script type="module" src="/src/analytics.js"></script>
   <meta name="theme-color" content="#f6f4ef">
   <title>${title} - Stratolink</title>
 ${socialMetadata({ title: `${title} - Stratolink`, path: slug === 'index' ? '/docs' : `/docs/${slug}`, description })}
