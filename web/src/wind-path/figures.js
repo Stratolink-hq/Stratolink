@@ -15,7 +15,6 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const fmt = (n, p = 0) => Number(n).toLocaleString('en-US', { maximumFractionDigits: p });
 const utc = ms => new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }) + ' UTC';
 const place = (lat, lon) => `${Math.abs(lat).toFixed(1)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? 'E' : 'W'}`;
-const ago = hours => hours < 1 ? 'just now' : hours < 48 ? `${fmt(hours, 1)} hours ago` : `${fmt(hours / 24, 1)} days ago`;
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const toward = (u, v) => COMPASS[Math.round(((Math.atan2(u, v) / rad + 360) % 360) / 22.5) % 16];
 function km(lat1, lon1, lat2, lon2) {
@@ -34,8 +33,8 @@ function load(file) {
 }
 
 /* ── map on canvas ──────────────────────────────────────────────────────────── */
-const ATLANTIC = { lon0: -128, lon1: 8, lat0: 12, lat1: 58 };
 const GAP_VIEW = { lon0: -112, lon1: 0, lat0: 14, lat1: 56 };
+const FLIGHT_VIEW = { lon0: -128, lon1: 4, lat0: 18, lat1: 57 };
 const WIDE_VIEW = { lon0: -125, lon1: 35, lat0: 8, lat1: 68 };
 const WORLD = { lon0: -30, lon1: 330, lat0: -12, lat1: 78, wrap: true };
 
@@ -235,63 +234,45 @@ function drawTrack(map, segments, minutes) {
   }
 }
 
-/* ── 1. the flight, replayed ───────────────────────────────────────────────── */
+/* ── 1. the fixes, and the path between them ───────────────────────────────── */
 async function replay(host, signal) {
-  const [flight, coast, wind] = await Promise.all([load('flight.json'), load('coast-atlantic.json'), windField()]);
+  const [flight, coast] = await Promise.all([load('flight.json'), load('coast-atlantic.json')]);
   if (signal.aborted) return;
-  const { t0, fixes, end } = flight, distinct = fixes.filter(f => f[3]), gaps = longGaps(fixes), segments = trackSegments(flight.track, gaps);
-  const dark = gaps.reduce((s, [a, b]) => s + b - a, 0);
-  host.innerHTML = `${heading('Stratolink 3, replayed', `GFS winds at ${fmt(wind.levelHpa)} hPa`)}
-    <div class="fleet-metrics contact-metrics"><span><b>${fixes.length}</b>packets with a position</span><span><b>${distinct.length}</b>distinct positions</span><span><b>${fmt(dark / 60)} h</b>of ${fmt(end / 60)} without a packet for over six hours</span></div>
-    <div class="chart-legend">${windKey()}${key('Received position', INK, 'dot')}${key('The drawn line through the gaps', RED)}</div>
-    <div class="fleet-map-stage"><output class="fleet-hover" hidden></output></div>
-    ${footer('NOAA GFS, May 2026')}
-    <canvas class="packet-strip" role="img" aria-label="Timeline of received positions over the flight, with gaps longer than six hours shaded"></canvas>
-    <div class="waterfall-axis"><span>May 17</span><span>May 23</span><span>May 29</span></div>
-    ${slider('Flight hour', end, 10, 'Minutes since launch')}
-    <output class="chart-readout"></output>`;
-  const map = createMap(ATLANTIC, 'Stratolink 3 replayed over the North Atlantic: received positions, the wind field, and the reconstructed line through the gaps. Space plays, arrow keys step.');
+  const fixes = flight.fixes.filter(f => f[3]), track = flight.track.map(([, lat, lon]) => [lat, lon]);
+  const first = fixes[0], last = fixes.at(-1);
+  host.innerHTML = `${heading('Stratolink 3', 'May 17 to 29, 2026', false)}
+    <div class="capture-tabs" role="group" aria-label="Show"><button type="button" data-show="fixes" aria-pressed="true">GPS fixes</button><button type="button" data-show="path" aria-pressed="false">Reconstructed path</button></div>
+    <div class="chart-legend">${key('GPS fix', INK, 'dot')}${key('Reconstructed path', RED)}</div>
+    <div class="fleet-map-stage"></div>`;
+  const map = createMap(FLIGHT_VIEW, `Stratolink 3’s flight from San Francisco to Spain: the ${fixes.length} GPS fixes received, with a long stretch over the Atlantic that has none, and the path the dashboard reconstructs through them.`);
   host.querySelector('.fleet-map-stage').prepend(map.canvas);
-  const strip = host.querySelector('.packet-strip'), sctx = strip.getContext('2d');
-  const input = host.querySelector('input'), output = host.querySelector('.fleet-time output'), read = host.querySelector('.chart-readout'), hover = host.querySelector('.fleet-hover'), date = host.querySelector('.fleet-date');
-  let cursor = 0, width = 0;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  let reveal = 0, raf = 0;
   function draw() {
-    if (!width) return;
-    const tMs = t0 + cursor * 60000;
+    if (!map.width) return;
     map.base(coast);
-    wind.draw(map, tMs, { alpha: .34 });
-    drawTrack(map, segments, cursor);
-    const g = gaps.find(([a, b]) => cursor > a && cursor < b);
-    for (const [t, lat, lon, isDistinct] of fixes) if (t <= cursor) map.dot(lat, lon, isDistinct ? 2.2 : 1.5, isDistinct ? INK : '#a3a59e');
-    const last = distinct.filter(f => f[0] <= cursor).at(-1);
-    if (last) map.dot(last[1], last[2], g ? 5 : 6, g ? null : CREAM, INK, g ? 1.2 : 1.6);
-    sctx.clearRect(0, 0, width, 30); sctx.fillStyle = '#e3e4dd'; sctx.fillRect(0, 6, width, 16);
-    sctx.fillStyle = 'rgba(50,140,179,.22)';
-    for (const [a, b] of gaps) sctx.fillRect(a / end * width, 6, (b - a) / end * width, 16);
-    for (const [t, , , isDistinct] of fixes) { sctx.fillStyle = isDistinct ? INK : '#b3b5ae'; sctx.fillRect(t / end * width, 6, Math.max(.8, width / 1500), 16); }
-    sctx.fillStyle = INK; sctx.fillRect(cursor / end * width - 1, 0, 2, 29);
-    input.value = cursor; output.textContent = fmt(cursor / 60, 1); date.textContent = utc(tMs);
-    const since = last ? (cursor - last[0]) / 60 : 0;
-    read.textContent = g
-      ? `${fmt(since)} h without a packet / the red line is the reconstruction the dashboard draws`
-      : last ? `last packet ${ago(since)} from ${place(last[1], last[2])}` : 'before launch';
+    if (reveal > 0) map.line(track, { color: RED, width: 2, end: Math.max(2, Math.ceil(reveal * track.length)) });
+    for (const [, lat, lon] of fixes) map.dot(lat, lon, 3.2, INK, CREAM, 1);
+    const label = (fix, text, dx, dy) => {
+      const [x, y] = map.point(fix[1], fix[2]), ctx = map.ctx;
+      ctx.font = '11px Helvetica, Arial, sans-serif'; ctx.textAlign = dx < 0 ? 'right' : 'left'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = PAPER; ctx.lineWidth = 4; ctx.strokeText(text, x + dx, y + dy); ctx.fillStyle = INK; ctx.fillText(text, x + dx, y + dy);
+    };
+    label(first, 'Launch, May 17', 9, -6);
+    label(last, 'Last fix, May 29', -9, 18);
   }
-  const play = player(host, signal, dt => { cursor += dt * .6; if (cursor > end + 1500) cursor = 0; draw(); });
-  bindSlider(input, play, value => { cursor = value; draw(); });
-  keys(map.canvas, play, dir => { cursor = clamp(Math.min(cursor, end) + dir * 360, 0, end); draw(); });
-  /* Scrub by pressing on the timeline and dragging; hovering does nothing. */
-  const scrub = event => { const b = strip.getBoundingClientRect(); cursor = clamp((event.clientX - b.left) / b.width * end, 0, end); draw(); };
-  strip.onpointerdown = event => { strip.setPointerCapture(event.pointerId); play.set(false); scrub(event); };
-  strip.onpointermove = event => { if (strip.hasPointerCapture(event.pointerId)) scrub(event); };
-  strip.onpointerup = strip.onpointercancel = event => { if (strip.hasPointerCapture(event.pointerId)) strip.releasePointerCapture(event.pointerId); };
-  map.canvas.onpointermove = event => {
-    const [x, y] = map.pointer(event), tMs = t0 + Math.min(cursor, end) * 60000;
-    const b = map.bounds, lat = b.lat1 - y / map.height * (b.lat1 - b.lat0), lon = b.lon0 + x / map.width * (b.lon1 - b.lon0);
-    const [u, v] = wind.at(tMs, lat, lon);
-    hover.hidden = false; hover.textContent = `${place(lat, lon)} / wind ${fmt(Math.hypot(u, v))} m/s toward ${toward(u, v)}`;
-  };
-  map.canvas.onpointerleave = () => { hover.hidden = true; };
-  observeChartSize(host, () => { width = host.clientWidth - 32; map.resize(width); sizeCanvas(strip, sctx, width, 30); draw(); }, signal);
+  function show(which) {
+    host.querySelectorAll('[data-show]').forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.show === which)));
+    cancelAnimationFrame(raf);
+    if (which !== 'path') { reveal = 0; draw(); return; }
+    if (reduced.matches) { reveal = 1; draw(); return; }
+    const start = performance.now();
+    const step = now => { reveal = clamp((now - start) / 1600, 0, 1); draw(); if (reveal < 1) raf = requestAnimationFrame(step); };
+    raf = requestAnimationFrame(step);
+  }
+  host.querySelectorAll('[data-show]').forEach(button => button.onclick = () => show(button.dataset.show));
+  signal.addEventListener('abort', () => cancelAnimationFrame(raf), { once: true });
+  observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
 }
 
 /* ── 5. riding the tube ────────────────────────────────────────────────────── */
