@@ -1,10 +1,10 @@
 export const siteDescription = 'Open-source, solar-powered balloon payloads for collecting and sharing data from the stratosphere. Build your own, follow our flights, and join the network.';
 
 const launchImage = {
-  src: '/assets/launch/source.jpg',
-  width: 2560,
-  height: 1440,
-  alt: 'A Stratolink balloon and its payload above the San Francisco skyline and clouds.',
+  src: '/assets/launch/social-card.jpg',
+  width: 1200,
+  height: 630,
+  alt: 'The Stratolink wordmark over a Stratolink balloon and its payload above the San Francisco skyline and clouds.',
 };
 const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const absolute = path => new URL(path, 'https://stratolink.org').href;

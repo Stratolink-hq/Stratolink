@@ -6,8 +6,9 @@ The source is Teddy Warner's launch photograph, supplied as `/Users/twarn/Downlo
 
 | Asset | Dimensions | Use |
 | --- | --- | --- |
-| `public/assets/launch/source.jpg` | 2560 × 1440 | Source photograph for the layer compiler and social card |
+| `public/assets/launch/source.jpg` | 2560 × 1440 | Source photograph for the layer compiler and placeholder |
 | `public/assets/launch/sky.webp` | 2560 × 1440, RGB | Served sky plate: `sky.png`'s colour with the original photograph's detail in clear sky (`scripts/prepare-launch-sky.py`) |
+| `public/assets/launch/social-card.jpg` | 1200 × 630 | Link-preview image (`og:image`, `twitter:image`): graded crop of the original photograph with the wordmark |
 | `public/assets/launch/sky.png` | 1672 × 941, RGB | Clear sky plate inpainted with the built-in image generator; fills behind the moving city, clouds and balloon |
 | `public/assets/launch/city-clouds.png` | 1672 × 941, RGBA | Generated alpha mask for the original skyline, clouds and foreground palm |
 | `public/assets/launch/balloon.png` | 1672 × 941, RGBA | Generated alpha mask for the original balloon, tether and payload |
