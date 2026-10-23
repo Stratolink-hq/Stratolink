@@ -26,8 +26,22 @@ been, entirely from **self-ingested NOAA wind data** (GFS, GEFS, AIGEFS). There 
   │ 3. scripts/compute_forecasts.ts   (tsx, WIND_CUBE_DIR=.windcube/cubes)         │
   │       buildForecastInputForDevice → computeMonteCarloForecast → storeForecast  │
   │                               → Vercel Blob  forecasts/{device}.json           │
+  │ 4. scripts/upload_cubes.mjs   the device's cube set (gzipped, ~3 MB)           │
+  │                               → Vercel Blob  cubes/{device}/{set}/{file}.slwc.gz│
+  │                                              cubes/{device}/manifest.json      │
   └──────────────────────────────────────────────────────────────────────────────┘
-                                          │  (cubes never leave the runner)
+                                          │
+  TTN webhook  web/api/ttn-webhook.ts     │  every stored GPS fix of a flying balloon
+    └ server/forecastRecomputeTrigger.ts ─┼─▶ GitHub repository_dispatch "new-fix"
+                                          │
+  GitHub Actions  .github/workflows/forecast-recompute.yml  (per fix, ~1–2 min, no Python)
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │ 1. scripts/recompute_forecast.ts  skip unless flying + newer fix + cube set   │
+  │                               Blob cubes/{device}/… → WIND_CUBE_DIR           │
+  │ 2. scripts/compute_forecasts.ts   same compute, origin = the newest fix       │
+  │                               → Vercel Blob  forecasts/{device}.json           │
+  └──────────────────────────────────────────────────────────────────────────────┘
+                                          │
                                           ▼
   Browser  GET /api/forecast?device=…[&view=path]
            web/api/forecast.js → web/server/forecastApi.js
@@ -37,12 +51,18 @@ been, entirely from **self-ingested NOAA wind data** (GFS, GEFS, AIGEFS). There 
              • CDN-cached: public, s-maxage=300, stale-while-revalidate=3600 + ETag/304
 ```
 
-Two tiers, both cheap and rate-limit-free:
+Three tiers, all cheap and rate-limit-free:
 
 | Tier | Where | Cadence | Cost |
 |---|---|---|---|
-| **Ingest + compute** (NOAA → cubes → forecast JSON) | GitHub Actions runner | 4×/day | free (public repo), wall-clock only |
+| **Ingest + compute** (NOAA → cubes → forecast JSON, cube set → Blob) | GitHub Actions runner | 4×/day | free (public repo), wall-clock only |
+| **Recompute** (Blob cube set → forecast JSON from the newest fix, §5) | GitHub Actions runner | per GPS fix (~every 20 min per flying balloon) | ~1–2 min of runner time, one ~2.5 MB Blob read; no NOAA traffic |
 | **Read** (forecast JSON → UI) | Vercel function `/api/forecast` | per cache miss | one Blob read + one Supabase lookup per 5 min per device/view (CDN) |
+
+The scheduled run is the only source of new wind data; the recompute tier only
+re-integrates the trajectory from a newer origin through the cubes the last
+scheduled run built, so the stored forecast's origin tracks the balloon within
+minutes instead of lagging it by up to 6 h.
 
 **Why self-ingest?** Open-Meteo's free tier meters by grid point, which made
 fleet-wide, fine-grid forecasts impossible, and it must never be on the production
@@ -125,7 +145,11 @@ and a long drift was advected by a frozen edge wind for most of its length (it
   live in `gfs_ingest.py` (`bilin_uv`, `cut_box`, `integrate_nominal_centers`,
   `build_tube_grids`); `FC_TUBE` / `GEFS_TUBE` / `AIGEFS_TUBE` = `0` revert to
   the static box. The dead-reckon is capped at `FC_DEAD_RECKON_CAP_H` (14 d);
-  beyond that even a perfect tube is a globe-sized cloud.
+  beyond that even a perfect tube is a globe-sized cloud. In time a tube runs
+  from one slice before the last fix through the dead-reckon to
+  `now + HORIZON_H + CUBE_EXTRA_H` (24 h + 6 h): the extra cron interval is what
+  lets the recompute tier (§5) start a full-horizon forecast from any fix that
+  arrives before the next scheduled run.
 
   *Why the member tube needs no cloud-sizing:* the compute reads member *i*'s
   path straight from member *i*'s tube (`memberPathFromTube`: the stored hourly
@@ -203,7 +227,17 @@ GRIB2 complex packing needs eccodes from conda-forge). Per run:
    **non-frozen, short-dt** fix pair (this fleet's GPS re-sends identical fixes,
    see the `stratolink-frozen-gps` memory note).
 6. **Write** both cubes as packed binary `.slwc` into `.windcube/cubes/`
-   (gitignored). Nothing is uploaded; the compute step reads them from disk.
+   (gitignored). The compute step reads them from disk; after it,
+   `scripts/upload_cubes.mjs` publishes each built device's whole set (both GFS
+   cubes + every member, gzipped) to Blob as a **versioned set**
+   `cubes/{device}/{set}/` (`set` = the build time), then writes
+   `cubes/{device}/manifest.json` naming that set, its files, the origin fix,
+   both cubes' time spans and member counts, for the recompute tier (§5). The
+   manifest is written last and names the files explicitly, so a reader never
+   sees a half-written set and a run that built fewer members never inherits
+   an older run's. The previous set is kept (a recompute may be mid-download),
+   older ones deleted; `blob_cleanup.mjs --apply` (the job's last step) also
+   purges anything older than two days, i.e. balloons no longer built.
 
 `gefs_ingest.py` then builds one tube cube per GEFS member (`gec00` + `gep01..30`,
 0.5° `pgrb2ap5`, 3-hourly, same level blending), and calls `aigefs_ingest.run()`
@@ -274,7 +308,7 @@ or any failed compute, fails the job.
    anchored to the fixes' barometer readings); a gap the winds cannot connect is
    flagged `unexplained` (corridor, low confidence). Per-gap and
    whole-mission caches live in Blob (`hindcasts/{device}*`), keyed by the fixes
-   and `ALGO_VERSION` (see §6).
+   and `ALGO_VERSION` (see §7).
 7. **Output**: `nominal_path` (forecast leg only), `ensemble`, one horizon
    `ellipse` (50/90 %, fitted to the inner 75 % of members), `endpoint` + wind,
    `bias_correction`, `observed` (reconstructed track, gap bridges, per-gap scalar
@@ -285,7 +319,67 @@ or any failed compute, fails the job.
 
 ---
 
-## 5. Read path and deployment
+## 5. Recompute tier: `.github/workflows/forecast-recompute.yml`
+
+A balloon reports a fix every ~20 min; the scheduled run only re-anchors the
+forecast four times a day, so between runs the stored forecast's origin fell up
+to 6 h behind the balloon and the dashboard could only splice newer fixes into
+the drawn line client-side (`liveTrack.ts`). The recompute tier closes that gap
+without any new NOAA traffic.
+
+**Trigger** (`web/server/forecastRecomputeTrigger.ts`, called from
+`server/ttnWebhook.ts`): once a telemetry row with a GPS position is stored —
+not a duplicate delivery, not an event packet — the webhook POSTs a
+`repository_dispatch` (`event_type: new-fix`, `client_payload.device`) to the
+GitHub REST API with `GITHUB_DISPATCH_TOKEN` (a fine-grained token with
+*Contents: read & write* on the repo; `GITHUB_DISPATCH_REPO` overrides the
+default `Stratolink-hq/Stratolink`). It is strictly off the response path:
+handed to Vercel's `waitUntil`, bounded by a 5 s timeout, every error logged
+and swallowed, and disabled entirely when the token is unset. Bursts (regional
+alias echoes, TTN retries) are debounced per device per function instance —
+the first packet dispatches at once, anything inside the next 5 s folds into
+one trailing dispatch — and the device's `flying` status is checked inside the
+background path, so the webhook never pays for it.
+
+**Workflow**: `repository_dispatch` only runs the workflow from the **default
+branch**, and GitHub does not register a new workflow file at all until it is
+on that branch (neither trigger works from a feature branch — test the two
+steps locally, see §7). `workflow_dispatch` (`device`, `force`) is the
+operator path.
+Concurrency group `forecast-recompute-{device}` with `cancel-in-progress`, so
+a burst keeps only the newest run. Node only (`npm ci`, no micromamba, no
+GRIB): ~1–2 min end to end.
+
+1. **Prepare** (`scripts/recompute_forecast.ts`, rules in
+   `lib/wind/forecastRecompute.ts`, pure + tested): skip unless the device is
+   `flying` and connected, has a fix in its mission window, the stored
+   forecast does **not** already start from that fix (`observed.gps_fixes`),
+   and the Blob cube set exists, is not older than the cubes the stored
+   forecast came from (a scheduled run stores its forecast before it uploads),
+   was laid out from a fix within `REANCHOR_MAX_GAP_H` (6 h) of the newest one
+   with a reconstruction cube that reaches it (a balloon back from a longer
+   silence waits for the next ingest, ≤ 6 h away), and its forecast cube spans
+   both the fix and "now". Otherwise it downloads the files the manifest names
+   from `cubes/{device}/{set}/` into `WIND_CUBE_DIR` (gunzipped, the ingest's
+   own filenames) and writes the plan + manifest
+   files the compute step reads, with the member expectations from the set's
+   manifest so a thin ensemble is still stamped `INCOMPLETE`. A skip is written
+   to the plan as well, so the compute step reports it and exits clean.
+2. **Compute** (`forecast:compute`, exactly as in the scheduled run): a fresh
+   fix (< 1 h) makes `forecast_origin.time_utc` = now at the fix's position;
+   `observed.gps_fixes` ends at the newest fix; `metadata.wind_cube_generated_at`
+   keeps the **cube's** build time, so the plan step (§3) can tell "re-stored
+   from old cubes" from "rebuilt". A cube set short of the full horizon (the
+   scheduled run overdue) still builds, `coverage_limited`.
+
+**What the scheduled run still owns**: new cubes. `forecastPlan.ts` judges a
+dark balloon's "final dead-reckon" by `cube_generated_at`, never by the
+forecast's `generated_at`, so a recompute can never freeze a device out of its
+next ingest.
+
+---
+
+## 6. Read path and deployment
 
 - **`GET /api/forecast?device=ID[&view=path]`** (`web/api/forecast.js` →
   `web/server/forecastApi.js`). 400 on a malformed id/view, 404 unless the device
@@ -301,19 +395,34 @@ or any failed compute, fails the job.
   forecast is a months-old dead-reckon); the reconstructed path is still drawn
   for the selected device because it is history.
 - **Secrets**: GitHub repo secrets `SUPABASE_URL` (or `NEXT_PUBLIC_SUPABASE_URL`),
-  `SUPABASE_SERVICE_ROLE_KEY`, `BLOB_READ_WRITE_TOKEN`, optional `HEALTHCHECK_URL`;
-  Vercel needs `BLOB_READ_WRITE_TOKEN` and the server Supabase key for the read
-  path. There is no `CRON_SECRET` and no compute endpoint any more.
+  `SUPABASE_SERVICE_ROLE_KEY`, `BLOB_READ_WRITE_TOKEN`, optional `HEALTHCHECK_URL`
+  (both workflows read the same three); Vercel needs `BLOB_READ_WRITE_TOKEN` and
+  the server Supabase key for the read path, plus `GITHUB_DISPATCH_TOKEN` for
+  the webhook's recompute trigger (§5; optional — without it the trigger is
+  off). There is no `CRON_SECRET` and no compute endpoint any more.
 
 ---
 
-## 6. Operational gotchas
+## 7. Operational gotchas
 
-- **Forcing a recompute** = re-running the workflow:
+- **Forcing a rebuild** (new cubes) = re-running the scheduled workflow:
   ```bash
   gh workflow run gfs-ingest.yml -f device=stratolink-3
   ```
-  (blank `device` = every flying device). There is no on-demand compute.
+  (blank `device` = every flying device). **Re-anchoring on the newest fix**
+  without new cubes = the recompute workflow (what the webhook fires per fix):
+  ```bash
+  gh workflow run forecast-recompute.yml -f device=stratolink-1
+  ```
+  (`-f force=true` rebuilds from the current cube set even when the stored
+  forecast already starts from the newest fix)
+  or the dispatch itself, `gh api repos/Stratolink-hq/Stratolink/dispatches -f event_type=new-fix -f 'client_payload[device]=stratolink-1'`
+  (default branch only). Its job summary says why a run was skipped. The same
+  two steps run locally against the live Blob set (reads the set, stores the
+  forecast exactly as the runner would):
+  ```bash
+  cd web && export WIND_CUBE_DIR=/tmp/wc/cubes FORECAST_PLAN=/tmp/wc/plan.json FORECAST_MANIFEST=/tmp/wc/manifest.json && node --env-file=.env.local --import tsx scripts/recompute_forecast.ts stratolink-1 --force && node --env-file=.env.local --import tsx scripts/compute_forecasts.ts stratolink-1
+  ```
 - **Reconstruction caches are keyed by fixes + `ALGO_VERSION`, not by cube.** After
   a reconstruction-code change bump `ALGO_VERSION` in `lib/wind/hindcastStorage.ts`
   (and `GAP_ALGO_VERSION` in `pathReconstruction.ts` for per-gap bridges), or the
@@ -331,10 +440,12 @@ or any failed compute, fails the job.
   unless you run the worker or `forecast_local.ts` against local cubes.
 - **Frozen GPS** (`stratolink-3`): the device re-sends identical fixes. The
   clean-pair count and box-pad velocity both skip zero-displacement pairs.
-- **Stale Blob objects**: `cubes/*` (from the retired upload step) and
-  `forecasts/*.lock.json` (from the retired on-demand compute) are dead weight;
-  `node --env-file=.env.local scripts/blob_cleanup.mjs` lists them and
-  `--apply` deletes them.
+- **Blob `cubes/{device}/`** is live again (the recompute tier's input, §5):
+  one versioned set per scheduled run, the previous one kept. Sets older than
+  two days and the retired
+  `forecasts/*.lock.json` are purged by the scheduled job's last step;
+  `node --env-file=.env.local scripts/blob_cleanup.mjs` lists them, `--apply`
+  deletes them by hand.
 - **`stratolink-2` never flew** (bench unit); its stored forecast is a
   dead-reckon fiction and the pipeline only recomputes devices flagged `flying`.
 
@@ -358,7 +469,7 @@ or any failed compute, fails the job.
 
 ---
 
-## 7. Deferred / known follow-ups
+## 8. Deferred / known follow-ups
 
 - **Workflow timing** (§3): move the cron past the GEFS/AIGEFS publication lag
   and give AIGEFS its own step so a timeout is visible instead of masked.
@@ -380,7 +491,11 @@ or any failed compute, fails the job.
 
 | File | Role |
 |---|---|
-| `.github/workflows/gfs-ingest.yml` | 4×/day ingest + compute job (the only forecast writer) |
+| `.github/workflows/gfs-ingest.yml` | 4×/day ingest + compute + cube-set upload (the only source of new cubes) |
+| `.github/workflows/forecast-recompute.yml` | per-fix recompute from the Blob cube set (§5) |
+| `web/server/forecastRecomputeTrigger.ts` | webhook-side debounced `repository_dispatch` |
+| `web/scripts/recompute_forecast.ts`, `web/lib/wind/forecastRecompute.ts` | recompute prepare step + its skip rules |
+| `web/scripts/upload_cubes.mjs` | publish a device's versioned cube set to Blob `cubes/{device}/{set}/` + manifest |
 | `web/scripts/gfs_ingest.py` | build the two GFS cubes from NOAA NODD |
 | `web/scripts/gefs_ingest.py`, `aigefs_ingest.py` | per-member GEFS / AIGEFS tube cubes |
 | `web/scripts/compute_forecasts.ts` | runner-side compute + store |
@@ -393,5 +508,5 @@ or any failed compute, fails the job.
 | `web/lib/wind/buildForecastInput.ts` | Supabase telemetry → compute input |
 | `web/server/forecastApi.js`, `web/api/forecast.js` | browser read endpoint (gating, caching) |
 | `web/server/forecastStorage.js`, `locationPrivacy.js` | bounded private Blob read, `sanitizeForecast` |
-| `web/scripts/blob_cleanup.mjs` | list/delete stale `cubes/*` and lock objects |
+| `web/scripts/blob_cleanup.mjs` | list/delete cube sets older than two days and lock objects |
 | `web/scripts/forecast_local.ts`, `inspect_cube.ts`, `_run_with_env.py` | local iteration tools |

@@ -221,7 +221,7 @@ def build_device(device, fixes, target_p, latest):
     # cap reaches "now". Same cadence + cap as the GFS tube.
     reach = min(now, last_fix + timedelta(hours=g.DEAD_RECKON_CAP_H))
     reached_now = reach >= now - timedelta(hours=GEFS_STEP_H)
-    end = reach + timedelta(hours=g.HORIZON_H + GEFS_STEP_H if reached_now else 0)
+    end = reach + timedelta(hours=g.HORIZON_H + g.CUBE_EXTRA_H + GEFS_STEP_H if reached_now else 0)
     start = g.floor_step(last_fix, GEFS_STEP_H)
     schedule, t = [], start
     while t <= end:

@@ -1,8 +1,10 @@
 // List (and, with --apply, delete) stale objects in the private forecast Blob
-// store: `cubes/*` from the retired cube-upload step (the worker now reads cubes
-// from the runner's disk via WIND_CUBE_DIR) and `forecasts/*.lock.json` from the
-// retired on-demand compute path. Everything else — forecasts/{device}.json and
-// the hindcasts/ caches — is live and never touched.
+// store: cube sets under `cubes/` that are older than CUBE_MAX_AGE_DAYS (the
+// ingest overwrites a flying balloon's set in place four times a day, so an old
+// set belongs to a balloon that is no longer built — landed, lost, frozen) and
+// `forecasts/*.lock.json` from the retired on-demand compute path. Everything
+// else — forecasts/{device}.json and the hindcasts/ caches — is live and never
+// touched. The scheduled worker runs this with --apply after each ingest.
 //
 //   node --env-file=.env.local scripts/blob_cleanup.mjs           # list only (default)
 //   node --env-file=.env.local scripts/blob_cleanup.mjs --apply   # delete the listed objects
@@ -33,8 +35,14 @@ async function listAll(prefix) {
     return blobs;
 }
 
+/** Cube sets older than this are purged: the recompute tier only ever reads a
+ *  set written by the latest scheduled ingest (≤ 6 h old), so two days is ample
+ *  slack for a paused schedule while still clearing landed balloons' sets. */
+const CUBE_MAX_AGE_DAYS = 2;
+const now = Date.now();
 const STALE = [
-    { label: 'cubes/* (retired upload step)', prefix: 'cubes/', keep: () => false },
+    { label: `cubes/* older than ${CUBE_MAX_AGE_DAYS} days`, prefix: 'cubes/',
+      keep: (b) => now - new Date(b.uploadedAt).getTime() < CUBE_MAX_AGE_DAYS * 86_400_000 },
     { label: 'forecasts/*.lock.json (retired on-demand compute locks)', prefix: 'forecasts/', keep: (b) => !b.pathname.endsWith('.lock.json') },
 ];
 
