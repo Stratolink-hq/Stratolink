@@ -530,8 +530,7 @@ function BrandStrip() {
 }
 
 /* ──────────────────────────────────────────────────────────────
- * Charts drawer (mobile) — slides up from the bottom over the map.
- * Collapsed, only the grab handle peeks above the bottom edge.
+ * Selected balloon summary.
  * ────────────────────────────────────────────────────────────── */
 function BalloonCard({ device, devices, onSelect, scrubRow, summary }: {
     device: DeviceSummary | null;

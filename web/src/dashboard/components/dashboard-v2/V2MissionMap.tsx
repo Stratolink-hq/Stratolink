@@ -477,7 +477,7 @@ export default function V2MissionMap({
          * snap instantly — animating would show the fallback view and then rotate/
          * zoom over to the balloon. Later device switches animate. */
         const firstFit = fittedActiveRef.current === undefined;
-        const fitDuration = firstFit ? 0 : 1200;
+        const fitDuration = firstFit || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1200;
 
         /* Keep camera updates out of uncaught rejects from mapbox-gl. */
         try {
