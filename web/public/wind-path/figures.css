@@ -13,3 +13,5 @@
 .tube-inset figcaption { margin-top: 6px; font-size: 12px; color: #62675e; }
 .interactive-chart[data-chart=replay] { min-height: 330px; }
 @media (max-width: 600px) { .interactive-chart[data-chart=replay] { min-height: 180px; } }
+.interactive-chart[data-chart=plain] { min-height: 400px; }
+@media (max-width: 600px) { .interactive-chart[data-chart=plain] { min-height: 260px; } }

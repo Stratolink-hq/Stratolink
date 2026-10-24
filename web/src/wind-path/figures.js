@@ -35,6 +35,7 @@ function load(file) {
 /* ── map on canvas ──────────────────────────────────────────────────────────── */
 const GAP_VIEW = { lon0: -112, lon1: 0, lat0: 14, lat1: 56 };
 const FLIGHT_VIEW = { lon0: -128, lon1: 2, lat0: 23, lat1: 53 };
+const WINDS_VIEW = { lon0: -112, lon1: 2, lat0: 24, lat1: 55 };
 const WIDE_VIEW = { lon0: -125, lon1: 35, lat0: 8, lat1: 68 };
 const WORLD = { lon0: -30, lon1: 330, lat0: -12, lat1: 78, wrap: true };
 
@@ -200,6 +201,42 @@ function keys(canvas, play, step) {
     else if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); play.set(false); step(event.key === 'ArrowRight' ? 1 : -1); }
   };
 }
+/* Draw-in-and-hold animation for the figures without controls: calls frame(f) with f
+ * going 0 → 1 over `duration` ms, holds f = 1 for `hold` ms, and starts again. Runs only
+ * while the figure is on screen and the page visible, restarts when it scrolls back into
+ * view, and shows the finished frame under prefers-reduced-motion. */
+function loop(host, signal, { duration, hold }, frame) {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  let visible = false, elapsed = 0, prev = 0, raf = 0;
+  function step(now) {
+    raf = 0;
+    if (!visible || document.hidden || reduced.matches) return;
+    if (prev) elapsed = (elapsed + Math.min(now - prev, 100)) % (duration + hold);
+    prev = now; frame(Math.min(elapsed / duration, 1));
+    raf = requestAnimationFrame(step);
+  }
+  function update() {
+    prev = 0;
+    if (reduced.matches) { cancelAnimationFrame(raf); raf = 0; frame(1); return; }
+    if (visible && !document.hidden && !raf) raf = requestAnimationFrame(step);
+  }
+  const observer = new IntersectionObserver(entries => {
+    const was = visible; visible = entries[0].isIntersecting;
+    if (visible && !was) elapsed = 0;
+    update();
+  }, { threshold: .3 });
+  observer.observe(host);
+  document.addEventListener('visibilitychange', update, { signal });
+  reduced.addEventListener('change', update, { signal });
+  signal.addEventListener('abort', () => { observer.disconnect(); cancelAnimationFrame(raf); }, { once: true });
+  return reduced.matches ? 1 : 0;
+}
+/* Map text with a paper halo, so it stays legible over lines. */
+function haloLabel(map, lat, lon, text, dx, dy, { color = INK, font = '11px Helvetica, Arial, sans-serif' } = {}) {
+  const [x, y] = map.point(lat, lon), ctx = map.ctx;
+  ctx.font = font; ctx.textAlign = dx < 0 ? 'right' : 'left'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = PAPER; ctx.lineWidth = 4; ctx.strokeText(text, x + dx, y + dy); ctx.fillStyle = color; ctx.fillText(text, x + dx, y + dy);
+}
 function sizeCanvas(canvas, ctx, width, height) {
   const dpr = Math.min(devicePixelRatio || 1, 2);
   canvas.width = width * dpr; canvas.height = height * dpr; canvas.style.width = `${width}px`; canvas.style.height = `${height}px`; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -236,7 +273,7 @@ function drawTrack(map, segments, minutes) {
 
 /* ── 1. the fixes, and the path between them ───────────────────────────────── */
 /* The fixes are drawn from the start; the reconstructed path draws itself in through
- * them, in flight time, holds, and starts again, while the figure is on screen. */
+ * them, in flight time, holds, and starts again. */
 async function replay(host, signal) {
   const [flight, coast] = await Promise.all([load('flight.json'), load('coast-atlantic.json')]);
   if (signal.aborted) return;
@@ -247,8 +284,7 @@ async function replay(host, signal) {
     <div class="fleet-map-stage"></div>`;
   const map = createMap(FLIGHT_VIEW, `Stratolink 3’s flight from San Francisco to Spain: the ${fixes.length} GPS fixes received, with a long stretch over the Atlantic that has none, and the path the dashboard reconstructs through them.`);
   host.querySelector('.fleet-map-stage').prepend(map.canvas);
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)'), DURATION = 4500, HOLD = 2000;
-  let minutes = reduced.matches ? end : 0, raf = 0;
+  let minutes = 0;
   function draw() {
     if (!map.width) return;
     map.base(coast);
@@ -261,37 +297,10 @@ async function replay(host, signal) {
     if (pts.length > 1) map.line(pts, { color: RED, width: 2 });
     for (const [, lat, lon] of fixes) map.dot(lat, lon, 3.2, INK, CREAM, 1);
     if (head) map.dot(head[0], head[1], 4, RED, CREAM, 1.2);
-    const label = (fix, text, dx, dy) => {
-      const [x, y] = map.point(fix[1], fix[2]), ctx = map.ctx;
-      ctx.font = '11px Helvetica, Arial, sans-serif'; ctx.textAlign = dx < 0 ? 'right' : 'left'; ctx.lineJoin = 'round';
-      ctx.strokeStyle = PAPER; ctx.lineWidth = 4; ctx.strokeText(text, x + dx, y + dy); ctx.fillStyle = INK; ctx.fillText(text, x + dx, y + dy);
-    };
-    label(first, 'Launch, May 17', 9, -6);
-    label(last, 'Last fix, May 29', -9, 18);
+    haloLabel(map, first[1], first[2], 'Launch, May 17', 9, -6);
+    haloLabel(map, last[1], last[2], 'Last fix, May 29', -9, 18);
   }
-  /* elapsed time in the draw-and-hold cycle; it only advances while the figure is visible */
-  let visible = false, elapsed = 0, prev = 0;
-  function step(now) {
-    raf = 0;
-    if (!visible || document.hidden || reduced.matches) return;
-    if (prev) elapsed = (elapsed + Math.min(now - prev, 100)) % (DURATION + HOLD);
-    prev = now; minutes = Math.min(elapsed / DURATION, 1) * end; draw();
-    raf = requestAnimationFrame(step);
-  }
-  function update() {
-    prev = 0;
-    if (reduced.matches) { cancelAnimationFrame(raf); raf = 0; minutes = end; draw(); return; }
-    if (visible && !document.hidden && !raf) raf = requestAnimationFrame(step);
-  }
-  const observer = new IntersectionObserver(entries => {
-    const was = visible; visible = entries[0].isIntersecting;
-    if (visible && !was) elapsed = 0;
-    update();
-  }, { threshold: .3 });
-  observer.observe(host);
-  document.addEventListener('visibilitychange', update, { signal });
-  reduced.addEventListener('change', update, { signal });
-  signal.addEventListener('abort', () => { observer.disconnect(); cancelAnimationFrame(raf); }, { once: true });
+  minutes = loop(host, signal, { duration: 4500, hold: 2000 }, f => { minutes = f * end; draw(); }) * end;
   observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
 }
 
@@ -470,75 +479,35 @@ async function resolution(host, signal) {
   }, signal);
 }
 
-/* ── 2. the straight line and the winds alone ──────────────────────────────── */
-/* Points along the great circle from a to b, [lat, lon] at fraction f. */
-function greatCircle(a, b) {
-  const v = ([lat, lon]) => [Math.cos(lat * rad) * Math.cos(lon * rad), Math.cos(lat * rad) * Math.sin(lon * rad), Math.sin(lat * rad)];
-  const p = v(a), q = v(b), om = Math.acos(clamp(p[0] * q[0] + p[1] * q[1] + p[2] * q[2], -1, 1));
-  return f => {
-    const wa = Math.sin((1 - f) * om) / Math.sin(om), wb = Math.sin(f * om) / Math.sin(om), x = p.map((c, i) => wa * c + wb * q[i]);
-    return [Math.asin(x[2]) / rad, Math.atan2(x[1], x[0]) / rad];
-  };
-}
+/* ── 2. the winds alone ────────────────────────────────────────────────────── */
+/* One simulated balloon riding the GFS winds from the fix before the gap, with no
+ * randomness, and how far it ends from the fix after it. Loops like the flight. */
 async function plain(host, signal) {
   const [cloud, fo, coast, wind] = await Promise.all([clouds(), load('forecast-only.json'), load('coast-atlantic.json'), windField()]);
   if (signal.aborted) return;
-  const p = cloud.posterior, { steps, hours, hoursPerStep, tA } = p, A = p.drawn[0], B = p.drawn[steps - 1], nominal = fo.nominal;
-  const along = greatCircle(A, B), distance = km(A[0], A[1], B[0], B[1]), speed = distance * 1000 / (hours * 3600);
-  const straight = Array.from({ length: 121 }, (_, k) => along(k / 120));
-  const miss = fo.nominalToB;
-  /* the straight line's heading against the wind along it, sampled every half hour */
-  const against = [];
-  for (let hr = .25; hr < hours; hr += .5) {
-    const f = hr / hours, q = along(f), r = along(Math.min(1, f + 1e-3));
-    const heading = Math.atan2((r[1] - q[1]) * Math.cos(q[0] * rad), r[0] - q[0]), [u, v] = wind.at(tA + hr * 3600000, q[0], q[1]);
-    against.push(Math.abs(((heading - Math.atan2(u, v)) / rad + 540) % 360 - 180));
-  }
-  const intoWind = against.filter(a => a > 90).length / against.length;
-  host.innerHTML = `${heading('A straight line, and the winds alone', `the ${fmt(hours)}-hour gap`)}
-    <div class="fleet-metrics contact-metrics"><span><b>${fmt(distance)} km</b>between the two fixes</span><span><b>${fmt(speed, 1)} m/s</b>to cover it in a straight line</span><span><b>${fmt(miss)} km</b>where the winds alone miss Spain</span></div>
-    <div class="chart-legend">${key('Straight line', GRAY)}${key('Riding the GFS winds, no randomness', INK)}${key('The fixes', INK, 'dot')}${windKey()}</div>
-    <div class="fleet-map-stage"></div>
-    ${footer('NOAA GFS at the hour shown')}
-    ${slider('Gap hour', hours, .5, 'Hours into the gap')}
-    <output class="chart-readout"></output>`;
-  const map = createMap(GAP_VIEW, `The eight-day gap from New Mexico to Spain: a straight line between the two fixes, which often runs across or against the wind, and the path the GFS winds alone take from New Mexico, which ends ${fmt(miss)} km from the fix in Spain. Space plays, arrow keys step.`);
+  const p = cloud.posterior, { steps, hours, hoursPerStep, tA } = p, A = p.drawn[0], B = p.drawn[steps - 1], nominal = fo.nominal, miss = fo.nominalToB;
+  host.innerHTML = `${heading('Following the winds', 'New Mexico to Spain, May 19 to 28', false)}
+    <div class="chart-legend">${key('A balloon riding the GFS winds', INK)}${key('The fixes', INK, 'dot')}${windKey()}</div>
+    <div class="fleet-map-stage"></div>`;
+  const map = createMap(WINDS_VIEW, `One simulated balloon carried by the GFS winds alone from the New Mexico fix: up the jet past Newfoundland, around a loop west of the Azores and toward Iberia, ending ${fmt(miss)} km from the fix in Spain.`);
   host.querySelector('.fleet-map-stage').prepend(map.canvas);
-  const input = host.querySelector('input'), output = host.querySelector('.fleet-time output'), read = host.querySelector('.chart-readout'), date = host.querySelector('.fleet-date');
-  let h = 0;
+  let f = 0;
   function draw() {
     if (!map.width) return;
-    const done = h >= hours - .5, hour = done ? hours : h, f = hour / hours, s = Math.min(hour / hoursPerStep, steps - 1), tMs = tA + hour * 3600000;
-    const k = Math.min(Math.floor(s), steps - 1), t = s - k, n1 = nominal[Math.min(steps - 1, k + 1)], n0 = nominal[k], w = [lerp(n0[0], n1[0], t), lerp(n0[1], n1[1], t)];
-    const q = along(f);
+    const hour = f * hours, s = Math.min(hour / hoursPerStep, steps - 1), k = Math.floor(s), t = s - k;
+    const n0 = nominal[k], n1 = nominal[Math.min(steps - 1, k + 1)], w = [lerp(n0[0], n1[0], t), lerp(n0[1], n1[1], t)];
     map.base(coast);
-    wind.draw(map, tMs, { alpha: .26 });
-    map.line(straight, { color: GRAY, width: 1.4, dash: [5, 4], alpha: .45 });
-    map.line([...straight.slice(0, Math.floor(f * 120) + 1), q], { color: GRAY, width: 2 });
+    wind.draw(map, tA + hour * 3600000, { alpha: .3 });
     map.line([...nominal.slice(0, k + 1), w], { color: INK, width: 2.2 });
-    if (done) {
-      const e = nominal[steps - 1];
-      map.line([e, B], { color: RED, width: 1.6, dash: [3, 3] });
-      const [x0, y0] = map.point(e[0], e[1]), [x1, y1] = map.point(B[0], B[1]);
-      const ctx = map.ctx, label = `${fmt(miss)} km`, lx = Math.min(x0, x1) - 8, ly = (y0 + y1) / 2 + 4;
-      ctx.font = '600 12px Helvetica, Arial, sans-serif'; ctx.textAlign = 'right'; ctx.lineJoin = 'round';
-      ctx.strokeStyle = PAPER; ctx.lineWidth = 4; ctx.strokeText(label, lx, ly); ctx.fillStyle = RED; ctx.fillText(label, lx, ly);
-    }
-    map.dot(q[0], q[1], 4, GRAY, CREAM, 1.2);
-    map.dot(w[0], w[1], 4.5, INK, CREAM, 1.2);
     map.dot(A[0], A[1], 5, CREAM, INK, 1.6); map.dot(B[0], B[1], 5, CREAM, INK, 1.6);
-    map.label(A[0], A[1], 'May 19, 22:28', 9, 14); map.label(B[0], B[1], 'May 28, 07:38', -9, -10);
-    input.value = hour; output.textContent = fmt(hour); date.textContent = utc(tMs);
-    if (done) read.textContent = `the winds alone carry the balloon up the jet, around a loop near the Azores and toward Iberia, then end ${fmt(miss)} km from where it was; the straight line ends on the fix but heads into the wind ${fmt(intoWind * 100)}% of the way`;
-    else {
-      const [u, v] = wind.at(tMs, q[0], q[1]), r = along(Math.min(1, f + 1e-3));
-      const dir = toward((r[1] - q[1]) * Math.cos(q[0] * rad), r[0] - q[0]);
-      read.textContent = `hour ${fmt(hour)}: the straight line moves ${fmt(speed, 1)} m/s toward the ${dir}; the wind under it blows ${fmt(Math.hypot(u, v))} m/s toward the ${toward(u, v)}`;
+    haloLabel(map, A[0], A[1], 'May 19', 9, 14); haloLabel(map, B[0], B[1], 'May 28', -9, -10);
+    if (f >= 1) {
+      map.line([w, B], { color: RED, width: 1.6, dash: [3, 3] });
+      haloLabel(map, (w[0] + B[0]) / 2, Math.min(w[1], B[1]), `${fmt(miss)} km`, -8, 4, { color: RED, font: '600 12px Helvetica, Arial, sans-serif' });
     }
+    map.dot(w[0], w[1], 4.5, INK, CREAM, 1.2);
   }
-  const play = player(host, signal, dt => { h += dt * .013; if (h > hours + 55) h = 0; draw(); });
-  bindSlider(input, play, value => { h = value; draw(); });
-  keys(map.canvas, play, dir => { h = clamp(Math.min(h, hours) + dir * 6, 0, hours); draw(); });
+  f = loop(host, signal, { duration: 4500, hold: 2500 }, value => { f = value; draw(); });
   observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
 }
 
