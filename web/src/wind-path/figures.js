@@ -497,7 +497,7 @@ async function plain(host, signal) {
     const hour = f * hours, s = Math.min(hour / hoursPerStep, steps - 1), k = Math.floor(s), t = s - k;
     const n0 = nominal[k], n1 = nominal[Math.min(steps - 1, k + 1)], w = [lerp(n0[0], n1[0], t), lerp(n0[1], n1[1], t)];
     map.base(coast);
-    wind.draw(map, tA + hour * 3600000, { alpha: .3 });
+    wind.draw(map, tA + hour * 3600000, { alpha: .7, width: 1.2 });
     map.line([...nominal.slice(0, k + 1), w], { color: INK, width: 2.2 });
     map.dot(A[0], A[1], 5, CREAM, INK, 1.6); map.dot(B[0], B[1], 5, CREAM, INK, 1.6);
     haloLabel(map, A[0], A[1], 'May 19', 9, 14); haloLabel(map, B[0], B[1], 'May 28', -9, -10);
