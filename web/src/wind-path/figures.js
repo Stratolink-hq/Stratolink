@@ -515,15 +515,15 @@ async function plain(host, signal) {
 /* Balloons run forward from the fix before the gap with small errors of their own,
  * around the path of the winds alone; loops like the other map-only figures. */
 async function spread(host, signal) {
-  const [cloud, fo, fbuf, coast] = await Promise.all([clouds(), load('forecast-only.json'), load('forecast-only.bin'), load('coast-atlantic.json')]);
+  const [cloud, fo, fbuf, coast, wind] = await Promise.all([clouds(), load('forecast-only.json'), load('forecast-only.bin'), load('coast-atlantic.json'), windField()]);
   if (signal.aborted) return;
-  const p = cloud.posterior, { steps, hours, hoursPerStep } = p, fpos = new Int16Array(fbuf), A = p.drawn[0], B = p.drawn[steps - 1], nominal = fo.nominal;
+  const p = cloud.posterior, { steps, hours, hoursPerStep, tA } = p, fpos = new Int16Array(fbuf), A = p.drawn[0], B = p.drawn[steps - 1], nominal = fo.nominal;
   const at = (i, s) => {
     const a = Math.floor(s), b = Math.min(steps - 1, a + 1), t = s - a, ia = (i * steps + a) * 2, ib = (i * steps + b) * 2;
     return [(fpos[ia] + (fpos[ib] - fpos[ia]) * t) / 100, (fpos[ia + 1] + (fpos[ib + 1] - fpos[ia + 1]) * t) / 100];
   };
   host.innerHTML = `${heading('A little noise, a huge spread', `${fo.n} simulated balloons, May 19 to 28`, false)}
-    <div class="chart-legend">${key('Balloons with small errors', GRAY, 'dot')}${key('The winds alone', INK)}${key('The fixes', INK, 'dot')}</div>
+    <div class="chart-legend">${key('Balloons with small errors', GRAY, 'dot')}${key('The winds alone', INK)}${key('The fixes', INK, 'dot')}${windKey()}</div>
     <div class="fleet-map-stage"></div>`;
   const map = createMap(WIDE_VIEW, `${fo.n} simulated balloons run forward from the New Mexico fix for eight days with small errors in heading, speed and height, spreading across the Atlantic, Europe and North Africa around the path of the winds alone.`);
   host.querySelector('.fleet-map-stage').prepend(map.canvas);
@@ -533,6 +533,7 @@ async function spread(host, signal) {
     const hour = f * hours, s = Math.min(hour / hoursPerStep, steps - 1), k = Math.floor(s), t = s - k;
     const n0 = nominal[k], n1 = nominal[Math.min(steps - 1, k + 1)];
     map.base(coast);
+    wind.draw(map, tA + hour * 3600000, { alpha: .5 });
     for (let i = 0; i < fo.n; i++) { const q = at(i, s); map.dot(q[0], q[1], 2.3, GRAY, null, 1, .85); }
     map.line([...nominal.slice(0, k + 1), [lerp(n0[0], n1[0], t), lerp(n0[1], n1[1], t)]], { color: INK, width: 2 });
     map.dot(A[0], A[1], 5, CREAM, INK, 1.6); map.dot(B[0], B[1], 5, CREAM, INK, 1.6);

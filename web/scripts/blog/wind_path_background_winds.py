@@ -1,8 +1,9 @@
 """Coarse background wind field for the blog post's maps: GFS U/V at the balloon's float
-pressure over the North Atlantic view, 2.5° every 3 hours over the same window as the
-stratolink-3 reconstruction cube. Reuses the ingest's NOAA S3 byte-range fetcher.
+pressure over the North Atlantic, Europe and North Africa (wide enough for the spread
+figure), 2.5° every 3 hours over the same window as the stratolink-3 reconstruction cube. Reuses the ingest's NOAA S3 byte-range fetcher.
 
-usage: python3 wind_path_background_winds.py <recon cube .slwc> <out dir>
+usage: python3 wind_path_background_winds.py <recon cube .slwc, or an existing winds.json> <out dir>
+(the window and float pressure come from the cube header, or from the old winds.json)
 writes <out dir>/winds.json and winds.bin (Int8 u,v in m/s, slice-major, row-major).
 """
 import json, os, struct, sys, time
@@ -13,9 +14,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 import gfs_ingest as gi  # noqa: E402
 
 CUBE, OUT = sys.argv[1:3]
-LAT0, DLAT, NLAT = 58.0, -2.5, 19      # 58 … 13
-LON0, DLON, NLON = -128.0, 2.5, 55     # -128 … 7
-raw = open(CUBE, 'rb').read(); hl = struct.unpack('<I', raw[:4])[0]; hdr = json.loads(raw[4:4 + hl].decode('utf8'))
+LAT0, DLAT, NLAT = 70.5, -2.5, 27      # 70.5 … 5.5 (on the same lattice as the original 58 … 13)
+LON0, DLON, NLON = -128.0, 2.5, 69     # -128 … 42
+if CUBE.endswith('.json'):
+    hdr = json.load(open(CUBE)); hdr['nGrids'] = hdr['n']
+else:
+    raw = open(CUBE, 'rb').read(); hl = struct.unpack('<I', raw[:4])[0]; hdr = json.loads(raw[4:4 + hl].decode('utf8'))
 level = hdr['levelHpa']; t0 = hdr['t0Ms']; step = hdr['stepMs']; n = hdr['nGrids']
 rows = np.round((90.0 - (LAT0 + DLAT * np.arange(NLAT))) / 0.25).astype(int)
 cols = (np.round(((LON0 + DLON * np.arange(NLON)) % 360.0) / 0.25).astype(int)) % 1440
