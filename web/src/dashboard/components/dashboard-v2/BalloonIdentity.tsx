@@ -6,7 +6,7 @@ export function OfficialBadge({ official }: { official?: boolean }) {
 }
 export function BalloonOwner({ device, link = true }: { link?: boolean; device: Pick<DeviceSummary,'ownerGithub' | 'official'> }) {
     const login = device.official ? 'Stratolink-hq' : device.ownerGithub;
-    const label = device.official ? 'stratolink' : login;
+    const label = login;
     if (!login) return null;
     const content = <><FontAwesomeIcon icon={faGithub} aria-hidden /> @{label}</>;
     return !link ? <span className="balloon-owner">{content}</span> : <a className="balloon-owner" href={`https://github.com/${encodeURIComponent(login)}`} target="_blank" rel="noreferrer">{content}</a>;
