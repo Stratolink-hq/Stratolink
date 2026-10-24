@@ -28,3 +28,12 @@
   .match-panel { flex-basis: 100%; display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; align-items: center; }
   .match-panel figcaption { margin-top: 0; }
 }
+
+/* Phones: the interactive figures run edge to edge (past the page's 20px gutter) with
+   slim card padding, so the maps get nearly the whole screen width; captions stay on
+   the text column. */
+@media (max-width: 600px) {
+  .post-figure.wide:has(> .interactive-chart) { width: calc(100% + 40px); margin-left: -20px; }
+  .post-figure.wide > .interactive-chart { padding: 16px 8px 10px; border-radius: 0; }
+  .post-figure.wide:has(> .interactive-chart) > figcaption { padding: 0 20px; }
+}
