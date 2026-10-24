@@ -333,17 +333,18 @@ export default function MissionControlScreen() {
     /* Live while any balloon is being carried along its forecast, even with no recent packet. */
     const fleetArchived = fleetRecorded && fleetLiveT === null;
     const fleetBalloons = useMemo<V2Balloon[]>(() => devices.flatMap(device => {
+        const frozen = fleetScrubT === null && device.status === 'missing' ? device.frozenPosition : null;
+        if (frozen) return [{ id: device.id, lat: frozen.lat, lon: frozen.lon, altitude_m: null }];
         const projected = projectedFleetPosition(fleetTracks[device.id] ?? [], fleetForecasts[device.id], fleetScrubT ?? fleetLive[device.id] ?? null);
         if (projected) return [{ id: device.id, ...projected, altitude_m: null }];
         const rows = fleetHistory.rowsByDevice[device.id] ?? [];
         const position = mappedPosition(rows, fleetScrubT);
         const point = fleetScrubT !== null ? lerpAlongTrack(fleetTracks[device.id] ?? [], fleetScrubT) : null;
         if (position && point) { position.lon = ((point[0] + 180) % 360 + 360) % 360 - 180; position.lat = point[1]; }
-        const frozen = fleetScrubT === null && device.status === 'missing' ? device.frozenPosition : null;
-        if (frozen) return [{ id: device.id, lat: frozen.lat, lon: frozen.lon, altitude_m: null }];
         return position ? [{ id: device.id, ...position }] : [];
     }), [devices, fleetHistory.rowsByDevice, fleetTracks, fleetScrubT, fleetLive, fleetForecasts]);
     const fleetFitBalloons = useMemo<V2Balloon[]>(() => devices.flatMap(device => {
+        if (device.status === 'missing' && device.frozenPosition) return [{ id: device.id, ...device.frozenPosition, altitude_m: null }];
         const projected = projectedFleetPosition(fleetTracks[device.id] ?? [], fleetForecasts[device.id], fleetLive[device.id] ?? null);
         if (projected) return [{ id: device.id, ...projected, altitude_m: null }];
         const position = mappedPosition(fleetHistory.rowsByDevice[device.id] ?? [], null);
