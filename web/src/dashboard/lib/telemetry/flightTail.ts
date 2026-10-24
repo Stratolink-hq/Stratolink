@@ -54,10 +54,10 @@ type TailSource = {
 };
 
 /** A gradient is constant per Mapbox layer; share each palette color across the fleet. */
-export function fleetTailSources(paths: FleetPath[], cursor: number | null): TailSource[] {
+export function fleetTailSources(paths: FleetPath[], cursor: number | null, windowMs = TAIL_WINDOW_MS): TailSource[] {
     const sources = new Map<string, TailSource>();
     for (const path of paths) {
-        const tail = flightTail(path.points, cursor);
+        const tail = flightTail(path.points, cursor, windowMs);
         if (tail.points.length < 2 || tail.opacity <= 0) continue;
         let source = sources.get(path.color);
         if (!source) {

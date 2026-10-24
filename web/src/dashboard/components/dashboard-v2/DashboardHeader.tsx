@@ -163,7 +163,7 @@ export default function DashboardHeader({ onBack }: { onBack?: (animate?: boolea
                         <span className="dashboard-switch-track" aria-hidden />
                     </label>
                     <label className="dashboard-layer-option">
-                        Projected path
+                        {onBack ? 'Projected path' : 'Estimated path'}
                         <input type="checkbox" role="switch" checked={controls.showProjectedPath} onChange={event => controls.setShowProjectedPath(event.target.checked)} />
                         <span className="dashboard-switch-track" aria-hidden />
                     </label>

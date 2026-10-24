@@ -3,9 +3,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 import { useDashboardControls } from './dashboard-controls';
 import { useUnits } from './dashboard-units';
+import { ESTIMATED_COLOR } from './shared';
 
 /* Keep legend rows stable while scrubbing and remember the browser's expanded state. */
-export default function MapLegend({ hasForecast, hasHindcast, hasEstimated, hasGateways, colorScheme, fleet = false }: { fleet?: boolean; hasForecast: boolean; hasHindcast: boolean; hasEstimated: boolean; hasGateways: boolean; colorScheme: 'light' | 'dark' }) {
+export default function MapLegend({ hasForecast, hasHindcast, hasEstimated, hasEstimate = false, hasGateways, colorScheme, fleet = false }: { fleet?: boolean; hasForecast: boolean; hasHindcast: boolean; hasEstimated: boolean; /** A fleet balloon is drawn at an estimated position. */ hasEstimate?: boolean; hasGateways: boolean; colorScheme: 'light' | 'dark' }) {
     const { showGateways, showReceivingStations, showFlightTrail, showProjectedPath } = useDashboardControls();
     const showFlightPaths = showFlightTrail && !fleet;
     const u = useUnits();
@@ -74,6 +75,7 @@ export default function MapLegend({ hasForecast, hasHindcast, hasEstimated, hasG
 
 
                     </>}
+                    {showProjectedPath && fleet && hasEstimate && <LegendRow swatch={lineSwatch(ESTIMATED_COLOR, true)} label="estimated path" />}
                     {showProjectedPath && !fleet && hasForecast && <LegendRow swatch={lineSwatch(L.forecast, true)} label="projected path" />}
                     {(showGateways || showReceivingStations) && <>
                     <LegendHeading style={{ marginTop: showFlightPaths || showProjectedPath || fleet ? 10 : 0 }}>Gateways</LegendHeading>

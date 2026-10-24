@@ -25,6 +25,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { useGlobePortal } from './globe-portal';
 import { applyPortalLabelVisibility, usePortalCamera } from './usePortalCamera';
 import { fleetTailSources, unwrapLngs } from '@/lib/telemetry/flightTail';
+import { FleetProjections } from './FleetProjections';
 import GatewayLayer from '@/components/maps/GatewayLayer';
 import GatewayRangeRings from '@/components/maps/GatewayRangeRings';
 import { quietBasemapLabels } from '@/components/maps/quietBasemapLabels';
@@ -110,6 +111,8 @@ interface V2MissionMapProps {
     showFlightPaths?: boolean;
     showFlightTails?: boolean;
     showProjectedPath?: boolean;
+    /** Each GPS-dark balloon's estimated path from its last fix to its marker. */
+    fleetEstimates?: Array<{ drift: Array<[number, number]>; ahead: Array<[number, number]> }>;
     /** When set, the auto-fit camera only considers flight-path points with
      *  `t <= playbackT` (so the view frames the flown-so-far track). Transmit
      *  dots are always drawn regardless. */
@@ -199,6 +202,12 @@ function isWebGLAvailable(): boolean {
     }
 }
 
+/* A #rrggbb palette color at partial opacity; Mapbox styles don't take #rrggbbaa. */
+function withAlpha(hex: string, alpha: number) {
+    const value = parseInt(hex.slice(1), 16);
+    return `rgba(${value >> 16}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}
+
 export default function V2MissionMap({
     balloons,
     activeId = null,
@@ -213,6 +222,7 @@ export default function V2MissionMap({
     showFlightPaths = true,
     showFlightTails = false,
     showProjectedPath = true,
+    fleetEstimates = [],
     playbackT = null,
     autoFit = true,
     preserveCamera = false,
@@ -326,7 +336,9 @@ export default function V2MissionMap({
         type: 'Feature' as const, properties: {},
         geometry: { type: 'LineString' as const, coordinates: unwrapLngs(validFlightPath.map(point => [point.lon, point.lat])) },
     } : null, [validFlightPath]);
-    const tailSources = useMemo(() => showFlightTails ? fleetTailSources(fleetPaths, playbackT) : [],
+    /* The whole flight up to the cursor, not just the last day: a balloon's
+     * marker always has its path behind it. */
+    const tailSources = useMemo(() => showFlightTails ? fleetTailSources(fleetPaths, playbackT, Infinity) : [],
         [fleetPaths, playbackT, showFlightTails]);
     const fleetColors = useMemo(
         () => new globalThis.Map(fleetPaths.map(path => [path.deviceId, path.color])),
@@ -981,11 +993,13 @@ export default function V2MissionMap({
                                     paint={{
                                         'line-width': 2.5,
                                         'line-opacity': ['get', 'opacity'],
-                                        'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, 'rgba(0,0,0,0)', 1, source.color],
+                                        /* Older flight fades but never vanishes. */
+                                        'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, withAlpha(source.color, 0.25), 1, source.color],
                                     }}
                                 />
                             </Source>
                         ))}
+                        {showProjectedPath && fleetEstimates.length > 0 && <FleetProjections legs={fleetEstimates} />}
                         {showFlightPaths && !hindcastGeoJSON && observedPath && (
                             <Source id="v2-observed-path" type="geojson" data={observedPath}>
                                 <Layer id="v2-observed-path-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
