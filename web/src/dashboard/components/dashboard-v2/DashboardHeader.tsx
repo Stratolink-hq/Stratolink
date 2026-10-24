@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faChevronLeft, faBars, faMoon, faSun, faXmark } from '@fortawesome/free-solid-svg-icons';
+import { faChevronLeft, faChevronDown, faBars, faXmark, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { useCommunity } from './community-account';
 import { useDashboardTheme } from './dashboard-theme';
@@ -18,6 +18,8 @@ export default function DashboardHeader({ onBack }: { onBack?: (animate?: boolea
     const trigger = useRef<HTMLButtonElement>(null);
     const menu = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
+    const [accountOpen, setAccountOpen] = useState(false);
+    const accountMenuId = useId();
     const registrationOpen = community.panel === 'register';
     const [position, setPosition] = useState({ top: 64, right: 16 });
 
@@ -99,38 +101,42 @@ export default function DashboardHeader({ onBack }: { onBack?: (animate?: boolea
                 onToggle={(event) => {
                     const isOpen = event.newState === 'open';
                     setOpen(isOpen);
+                    if (!isOpen) setAccountOpen(false);
                     if (!isOpen && (menu.current?.contains(document.activeElement) || document.activeElement === document.body)) {
                         trigger.current?.focus({ preventScroll: true });
                     }
                 }}
             >
-                <fieldset className="dashboard-menu-group">
-                    <legend>Appearance</legend>
-                    <div className="dashboard-choices">
+                {community.account && <div className="dashboard-account-profile">
+                    <button type="button" className="dashboard-account-trigger" aria-expanded={accountOpen} aria-controls={accountMenuId} onClick={() => setAccountOpen(value => !value)}>
+                        <FontAwesomeIcon icon={faGithub} aria-hidden />
+                        <span>@{community.account}</span>
+                        <FontAwesomeIcon icon={faChevronDown} className="dashboard-account-caret" aria-hidden />
+                    </button>
+                    <div id={accountMenuId} hidden={!accountOpen}>
+                        <button type="button" className="dashboard-signout" disabled={community.busy} onClick={() => { menu.current?.hidePopover(); void community.signOut(); }}>Sign out</button>
+                    </div>
+                </div>}
+                <fieldset className="dashboard-menu-group dashboard-preferences">
+                    <legend>Preferences</legend>
+                    <div className="dashboard-choices" role="group" aria-label="Appearance">
                         <label className="dashboard-choice">
-                            <input type="radio" name={themeName} value="light" checked={theme === 'light'} onChange={() => pickTheme('light')} />
-                            <FontAwesomeIcon icon={faSun} aria-hidden />
-                            Light
+                            <input type="radio" name={themeName} checked={theme === 'light'} onChange={() => pickTheme('light')} />
+                            <FontAwesomeIcon icon={faSun} aria-hidden /> Light
                         </label>
                         <label className="dashboard-choice">
-                            <input type="radio" name={themeName} value="dark" checked={theme === 'dark'} onChange={() => pickTheme('dark')} />
-                            <FontAwesomeIcon icon={faMoon} aria-hidden />
-                            Dark
+                            <input type="radio" name={themeName} checked={theme === 'dark'} onChange={() => pickTheme('dark')} />
+                            <FontAwesomeIcon icon={faMoon} aria-hidden /> Dark
                         </label>
                     </div>
-                </fieldset>
-                <fieldset className="dashboard-menu-group dashboard-unit-options">
-                    <legend>Units</legend>
-                    <div className="dashboard-choices">
+                    <div className="dashboard-choices" role="group" aria-label="Units">
                         <label className="dashboard-choice">
-                            <input type="radio" name={unitsName} value="metric" checked={units === 'metric'} onChange={() => setUnits('metric')} />
-                            Metric
-                            <span className="dashboard-choice-detail" aria-hidden>m · km · °C</span>
+                            <input type="radio" name={unitsName} checked={units === 'metric'} onChange={() => setUnits('metric')} />
+                            <span aria-hidden>°C</span> Metric
                         </label>
                         <label className="dashboard-choice">
-                            <input type="radio" name={unitsName} value="imperial" checked={units === 'imperial'} onChange={() => setUnits('imperial')} />
-                            Imperial
-                            <span className="dashboard-choice-detail" aria-hidden>ft · mi · °F</span>
+                            <input type="radio" name={unitsName} checked={units === 'imperial'} onChange={() => setUnits('imperial')} />
+                            <span aria-hidden>°F</span> Imperial
                         </label>
                     </div>
                 </fieldset>
@@ -162,9 +168,8 @@ export default function DashboardHeader({ onBack }: { onBack?: (animate?: boolea
                         <span className="dashboard-switch-track" aria-hidden />
                     </label>
                 </fieldset>
-                {community.account && <fieldset className="dashboard-menu-group dashboard-account-options"><legend><span>Manage</span><span className="dashboard-account-name"><FontAwesomeIcon icon={faGithub} aria-hidden /> @{community.account}</span></legend>
+                {community.account && <fieldset className="dashboard-menu-group dashboard-account-options"><legend>Manage</legend>
                     <button onClick={() => { menu.current?.hidePopover(); community.setPanel('manage'); }}>Your balloons</button>
-                    <button className="dashboard-signout" disabled={community.busy} onClick={() => { menu.current?.hidePopover(); void community.signOut(); }}>Sign out</button>
                 </fieldset>}
                 <nav className="dashboard-menu-links" aria-label="Stratolink"><a href="/docs" target="_top">docs</a><a href="/blog" target="_top">blog</a><a href="mailto:contact@stratolink.org">contact</a></nav>
             </div>

@@ -202,3 +202,30 @@
     .balloon-card-metrics { margin-top: 6px; }
 }
 
+.dashboard-account-profile {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--t-border);
+}
+.dashboard-account-profile button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--t-text);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+.dashboard-account-trigger span { overflow: hidden; text-overflow: ellipsis; }
+.dashboard-account-caret { margin-left: auto; width: 9px; color: var(--t-text-3); transition: transform 160ms ease; }
+.dashboard-account-trigger[aria-expanded="true"] .dashboard-account-caret { transform: rotate(180deg); }
+.dashboard-account-profile .dashboard-signout { color: #a23a2d; padding-left: 30px; }
+[data-theme="dark"] .dashboard-account-profile .dashboard-signout { color: #e88e80; }
+@media (hover: hover) { .dashboard-account-profile button:hover { background: var(--t-panel-2); } }
+@media (prefers-reduced-motion: reduce) { .dashboard-account-caret { transition: none; } }
