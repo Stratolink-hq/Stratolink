@@ -8,7 +8,6 @@ import {
     faMoon,
     faSolarPanel,
     faSun,
-    faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { fmt, type TelemetryRow } from '@/components/dashboard-v2/atoms';
 import type { DeviceSummary } from '@/components/dashboard-v2/useTelemetry';
@@ -154,9 +153,10 @@ function Metric({ label, value, unit, icon, active = false, onSelect }: {
 }
 
 /** Readings the trend slot can chart; temperature is the default. */
-type ChartKey = 'temp' | 'batt' | 'solar' | 'lux' | 'tilt' | 'gw' | 'sats' | 'rssi' | 'snr';
+type ChartKey = 'temp' | 'pres' | 'spd' | 'hdg' | 'batt' | 'solar' | 'lux' | 'tilt' | 'gw' | 'sats' | 'rssi' | 'snr';
 const CHART_TITLES: Record<ChartKey, string> = {
-    temp: 'Temperature', batt: 'Storage', solar: 'Solar', lux: 'Ambient', tilt: 'Orientation',
+    temp: 'Temperature', pres: 'Pressure', spd: 'Ground speed', hdg: 'Heading',
+    batt: 'Storage', solar: 'Solar', lux: 'Ambient', tilt: 'Orientation',
     gw: 'Gateways', sats: 'GPS sats', rssi: 'RSSI', snr: 'SNR',
 };
 
@@ -206,6 +206,8 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
     const rssi = row?.rssi;
     const snr = row?.snr;
     const gwNow = row?.gateways?.length ?? null;
+    /* GPS speed arrives in m/s; the panel (and `flight.speed`) show km/h. */
+    const speedKmh = row?.spd != null ? row.spd * 3.6 : null;
 
     /* How many known gateways are within a fixed 150 km radius of the balloon's
      * current position (matches the 150 km coverage rings on the map). */
@@ -228,12 +230,16 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
     const tiltCol = tilt == null || !tiltReliable ? 'var(--t-text-3)' : tilt < 15 ? 'var(--t-nominal)' : tilt < 35 ? 'var(--t-warn)' : 'var(--t-critical)';
 
     /* Tapping a reading charts its history in the trend slot below altitude;
-     * tapping it again (or the slot's ×) returns to temperature. */
+     * the lit tile is the one being charted. Tapping it again returns to
+     * temperature, which has a tile of its own so it is never hidden. */
     const [chartKey, setChartKey] = useState<ChartKey>('temp');
     const toggleChart = (key: ChartKey) => setChartKey(current => (current === key ? 'temp' : key));
     const tiltSeries = useMemo(() => rows.map(r => computePayloadAttitude(r.ax, r.ay, r.az)?.tiltDeg ?? null), [rows]);
     const chart = ({
         temp: { series: flight.temp, value: row?.temp ?? null, fmtFn: (v: number) => tlmFmt.d1(v), unit: '°C' },
+        pres: { series: flight.press, value: row?.pres ?? null, fmtFn: (v: number) => tlmFmt.d1(v), unit: 'hPa' },
+        spd: { series: flight.speed, value: speedKmh, fmtFn: (v: number) => tlmFmt.int(v), unit: 'km/h' },
+        hdg: { series: flight.heading, value: row?.hdg ?? null, fmtFn: (v: number) => `${Math.round(v)}°`, unit: '' },
         batt: { series: flight.batt, value: batt ?? null, fmtFn: (v: number) => tlmFmt.d2(v), unit: 'V' },
         solar: { series: flight.solar, value: solar ?? null, fmtFn: (v: number) => tlmFmt.d2(v), unit: 'V' },
         lux: { series: flight.lux, value: lux, fmtFn: fmtLux, unit: 'lux' },
@@ -321,16 +327,9 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                         <span className="eyebrow" style={{ color: 'var(--t-text-2)' }}>
                             Altitude <span style={{ color: 'var(--t-text-4)', fontSize: 9 }}>pres</span>
                         </span>
-                        <span style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
-                            {row?.pres != null && (
-                                <span className="mono" style={{ fontSize: 11, color: 'var(--t-text-3)', fontVariantNumeric: 'tabular-nums' }}>
-                                    {tlmFmt.d1(row.pres)} hPa
-                                </span>
-                            )}
-                            <span className="disp mono" style={{ fontSize: 22, fontWeight: 600 }}>
-                                {altVal != null ? tlmFmt.int(altVal) : '-'}
-                                {altVal != null && <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-3)', marginLeft: 3 }}>m</span>}
-                            </span>
+                        <span className="disp mono" style={{ fontSize: 22, fontWeight: 600 }}>
+                            {altVal != null ? tlmFmt.int(altVal) : '-'}
+                            {altVal != null && <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-3)', marginLeft: 3 }}>m</span>}
                         </span>
                     </div>
                     <LineTrend
@@ -349,13 +348,8 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                 <Divider />
                 <div style={{ padding: '13px 0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span className="eyebrow" style={{ color: 'var(--t-text-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span className="eyebrow" style={{ color: 'var(--t-text-2)' }}>
                             {CHART_TITLES[chartKey]}
-                            {chartKey !== 'temp' && (
-                                <button type="button" className="tlm-chart-reset" onClick={() => setChartKey('temp')} aria-label="Show temperature" title="Show temperature">
-                                    <FontAwesomeIcon icon={faXmark} aria-hidden />
-                                </button>
-                            )}
                         </span>
                         <span className="disp mono" style={{ fontSize: 22, fontWeight: 600 }}>
                             {chart.value != null ? chart.fmtFn(chart.value) : '-'}
@@ -363,6 +357,13 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                         </span>
                     </div>
                     <LineTrend key={chartKey} series={chart.series} times={flight.times} status="nominal" fmtFn={chart.fmtFn} unit={chart.unit} height={44} scrubT={scrubT ?? scrubRow?.t ?? null} onPickTime={onPickTime} onScrubbingChange={onScrubbingChange} />
+                </div>
+                <Divider />
+                <div style={METRIC_ROW}>
+                    <Metric label="Temperature" {...select('temp')} value={row?.temp != null ? tlmFmt.d1(row.temp) : '-'} unit={row?.temp != null ? '°C' : undefined} />
+                    <Metric label="Pressure" {...select('pres')} value={row?.pres != null ? tlmFmt.d1(row.pres) : '-'} unit={row?.pres != null ? 'hPa' : undefined} />
+                    <Metric label="Speed" {...select('spd')} value={speedKmh != null ? tlmFmt.int(speedKmh) : '-'} unit={speedKmh != null ? 'km/h' : undefined} />
+                    <Metric label="Heading" {...select('hdg')} value={row?.hdg != null ? `${Math.round(row.hdg)}°` : '-'} />
                 </div>
             </Group>
 
