@@ -115,7 +115,7 @@ function ConnectionStatus({ connected, archived, recordedAt }: { connected: bool
  * width between them, so a wide value (e.g. "53,474 lux") claims room from
  * narrow neighbours instead of spilling into the next column. */
 const METRIC_ROW: React.CSSProperties = {
-    display: 'grid', gridTemplateColumns: 'repeat(4, auto)', justifyContent: 'space-between', columnGap: 8, padding: '14px 0',
+    display: 'grid', gridTemplateColumns: 'repeat(4, auto)', justifyContent: 'space-between', columnGap: 8, padding: '10px 0',
 };
 
 /** "1,626" below 10k lux, "53.5k" / "112k" above — full sun needs no finer
@@ -318,7 +318,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                 title="Flight path"
                 gkey="flight"
             >
-                <div style={{ padding: '13px 0' }}>
+                <div style={{ padding: '9px 0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <span className="eyebrow" style={{ color: 'var(--t-text-2)' }}>
                             Altitude <span style={{ color: 'var(--t-text-4)', fontSize: 9 }}>pres</span>
@@ -349,7 +349,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                     />
                 </div>
                 <Divider />
-                <div style={{ padding: '13px 0' }}>
+                <div style={{ padding: '9px 0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <span className="eyebrow" style={{ color: 'var(--t-text-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
                             {CHART_TITLES[chartKey]}
