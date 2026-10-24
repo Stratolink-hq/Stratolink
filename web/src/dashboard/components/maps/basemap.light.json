@@ -3,7 +3,7 @@
  "name": "stratolink-light",
  "sources": {
   "composite": {
-   "url": "mapbox://mapbox.mapbox-streets-v8,mapbox.mapbox-terrain-v2,mapbox.mapbox-bathymetry-v2",
+   "url": "mapbox://mapbox.mapbox-streets-v8,mapbox.mapbox-terrain-v2",
    "type": "vector"
   }
  },
