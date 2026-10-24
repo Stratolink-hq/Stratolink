@@ -977,12 +977,7 @@ function MapColumn({
                 showDayNight={!portalPreview && showDayNight}
                 showFlightPaths={!portalPreview && !isFleet && showFlightTrail}
                 showFlightTails={!portalPreview && isFleet && showFlightTrail}
-                showProjectedPath={!portalPreview && showProjectedPath}
-                fleetForecastIds={isFleet ? fleetDevices.filter(device => {
-                    if (!forecastEligible(device.status)) return false;   /* landed / recovered / retired / lost / missing: no projection */
-                    const lastT = fleetHistory[device.id]?.at(-1)?.t;
-                    return lastT != null && (device.launchedAt == null || lastT >= device.launchedAt);
-                }).map(device => device.id) : []}
+                showProjectedPath={!portalPreview && !isFleet && showProjectedPath}
                 balloons={isFleet ? fleetBalloons : balloon ? [balloon] : []}
                 fleetFitBalloons={portalPreview ? fleetFitBalloons.filter(point => fleetBalloons.some(balloon => balloon.id === point.id)) : isFleet ? fleetFitBalloons : undefined}
                 fleetPaths={fleetPaths}

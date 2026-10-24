@@ -25,7 +25,6 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { useGlobePortal } from './globe-portal';
 import { applyPortalLabelVisibility, usePortalCamera } from './usePortalCamera';
 import { fleetTailSources, unwrapLngs } from '@/lib/telemetry/flightTail';
-import { FleetProjections } from './FleetProjections';
 import GatewayLayer from '@/components/maps/GatewayLayer';
 import GatewayRangeRings from '@/components/maps/GatewayRangeRings';
 import { quietBasemapLabels } from '@/components/maps/quietBasemapLabels';
@@ -111,7 +110,6 @@ interface V2MissionMapProps {
     showFlightPaths?: boolean;
     showFlightTails?: boolean;
     showProjectedPath?: boolean;
-    fleetForecastIds?: string[];
     /** When set, the auto-fit camera only considers flight-path points with
      *  `t <= playbackT` (so the view frames the flown-so-far track). Transmit
      *  dots are always drawn regardless. */
@@ -215,7 +213,6 @@ export default function V2MissionMap({
     showFlightPaths = true,
     showFlightTails = false,
     showProjectedPath = true,
-    fleetForecastIds = [],
     playbackT = null,
     autoFit = true,
     preserveCamera = false,
@@ -989,9 +986,6 @@ export default function V2MissionMap({
                                 />
                             </Source>
                         ))}
-                        {showProjectedPath && fleetForecastIds.length > 0 && (
-                            <FleetProjections deviceIds={fleetForecastIds} color={C.forecast} />
-                        )}
                         {showFlightPaths && !hindcastGeoJSON && observedPath && (
                             <Source id="v2-observed-path" type="geojson" data={observedPath}>
                                 <Layer id="v2-observed-path-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
