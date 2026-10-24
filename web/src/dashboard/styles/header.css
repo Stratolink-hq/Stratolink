@@ -356,3 +356,29 @@
         }
     }
 }
+
+/* Compact paired controls share one Preferences section. */
+.dashboard-preferences .dashboard-choices {
+    gap: 2px;
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--t-panel-2);
+}
+.dashboard-preferences .dashboard-choices + .dashboard-choices {
+    margin-top: 7px;
+}
+.dashboard-preferences .dashboard-choice {
+    min-height: 32px;
+    border-color: transparent;
+    border-radius: 7px;
+    gap: 7px;
+    font-size: 11px;
+}
+.dashboard-preferences .dashboard-choice:has(input:checked) {
+    background: var(--t-panel);
+    border-color: var(--t-border);
+}
+.dashboard-preferences .dashboard-choice:has(input:focus-visible) {
+    outline: 2px solid var(--t-text-2);
+    outline-offset: 2px;
+}

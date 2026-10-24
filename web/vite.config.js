@@ -17,6 +17,31 @@ const ttnHandler = nodeHandler(ttnWebhook);
 import { docsSearchApi } from './server/docsSearch.js';
 
 
+// Local previews can read the public forecast without private Blob credentials.
+async function previewForecast(request, response) {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return forecastApi(request, response);
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    response.writeHead(405, { Allow: 'GET, HEAD' });
+    return response.end();
+  }
+  try {
+    const query = new URL(request.url, 'http://localhost').search;
+    const upstream = await fetch(`https://stratolink.org/api/forecast${query}`, {
+      method: request.method,
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = request.method === 'HEAD' ? undefined : Buffer.from(await upstream.arrayBuffer());
+    response.writeHead(upstream.status, {
+      'Content-Type': upstream.headers.get('content-type') || 'application/json',
+      'Cache-Control': 'no-store',
+    });
+    response.end(body);
+  } catch {
+    response.writeHead(503, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ message: 'Public forecast unavailable' }));
+  }
+}
+
 function dashboardRoute(server) {
   server.middlewares.use((request, response, next) => {
     if (/^\/api\/docs-search(\?|$)/.test(request.url ?? "")) return void docsSearchApi(request, response);
@@ -26,7 +51,7 @@ function dashboardRoute(server) {
       return response.end();
     }
     if (/^\/api\/telemetry(\?|$)/.test(request.url ?? "")) return void dashboardApi(request, response);
-    if (/^\/api\/forecast(\?|$)/.test(request.url ?? "")) return void forecastApi(request, response);
+    if (/^\/api\/forecast(\?|$)/.test(request.url ?? "")) return void previewForecast(request, response);
     if (/^\/api\/ttn-webhook(\?|$)/.test(request.url ?? "")) return void ttnHandler(request, response);
     if (/^\/api\/(account|balloons|activation|staff)(\/|\?|$)/.test(request.url ?? "")) return void communityHandler(request, response);
     const legacyPath = new URL(request.url ?? '/', 'http://localhost').pathname;

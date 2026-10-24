@@ -64,7 +64,7 @@ const FleetCard = memo(function FleetCard({ device, rows, waiting, scrubT, now, 
             style={{ viewTransitionName: transitioning ? balloonTransitionName(device.id) : undefined }}
             onClick={event => onSelect(device.id, event.detail !== 0)} aria-label={`Monitor ${balloonName(device)}`}>
             <CardHeading device={device} />
-            <CardStatus id={device.id} status={status} />
+            <span className="balloon-byline"><BalloonOwner device={device} link={false} /><CardStatus id={device.id} status={status} /></span>
             {isPlannedBalloon(device.status) ? <span className="balloon-card-plan">{device.plannedLaunchDate
                 ? `Planned launch ${new Date(`${device.plannedLaunchDate}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
                 : 'Launch date not set'}</span> : <span className="balloon-card-metrics">
@@ -80,7 +80,6 @@ const CardHeading = memo(function CardHeading({ device }: { device: DeviceSummar
             <span className="balloon-card-name"><span className="balloon-card-title">{balloonName(device)}</span><OfficialBadge official={device.official} /></span>
             <FontAwesomeIcon icon={faChevronRight} className="balloon-card-chevron" />
         </span>
-        {(device.official || device.ownerGithub) && <BalloonOwner device={device} link={false} />}
     </>;
 });
 

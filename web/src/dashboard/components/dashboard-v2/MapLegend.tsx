@@ -1,17 +1,11 @@
 import { useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { useDashboardControls } from './dashboard-controls';
 import { useUnits } from './dashboard-units';
 
-/* Single consolidated map legend — flight-path states + gateway coverage in
- * one card (top-right). Collapsible; defaults collapsed on mobile where space
- * is tight. Rows are keyed to whether a layer EXISTS for this flight (constant
- * across scrubbing), not to its current on-screen visibility — so the legend
- * stays stable as you scrub. */
+/* Keep legend rows stable while scrubbing and remember the browser's expanded state. */
 export default function MapLegend({ hasForecast, hasHindcast, hasEstimated, hasGateways, colorScheme, fleet = false }: { fleet?: boolean; hasForecast: boolean; hasHindcast: boolean; hasEstimated: boolean; hasGateways: boolean; colorScheme: 'light' | 'dark' }) {
-    const isMobile = useIsMobile();
     const { showGateways, showReceivingStations, showFlightTrail, showProjectedPath } = useDashboardControls();
     const showFlightPaths = showFlightTrail && !fleet;
     const u = useUnits();
@@ -29,10 +23,16 @@ export default function MapLegend({ hasForecast, hasHindcast, hasEstimated, hasG
         covStroke: dark ? 'rgba(110,180,190,0.55)' : 'rgba(90,92,98,0.55)',
         sightLine: dark ? 'rgba(110,180,190,0.5)' : 'rgba(90,92,98,0.6)',
     };
-    /* null = follow the per-device default (collapsed on mobile); once the
-     * user toggles, their explicit choice sticks. */
-    const [open, setOpen] = useState<boolean | null>(null);
-    const expanded = open === null ? !isMobile : open;
+    const [expanded, setExpanded] = useState(() => {
+        try { return localStorage.getItem('stratolink-dashboard-key-expanded') === 'true'; }
+        catch { return false; }
+    });
+    const toggleExpanded = () => {
+        const next = !expanded;
+        setExpanded(next);
+        try { localStorage.setItem('stratolink-dashboard-key-expanded', String(next)); }
+        catch { /* The key still works when browser storage is unavailable. */ }
+    };
 
     /* Swatch primitives — kept visually consistent so labels align. */
     const lineSwatch = (color: string, dashed = false, w = 18) => (
@@ -47,7 +47,7 @@ export default function MapLegend({ hasForecast, hasHindcast, hasEstimated, hasG
             {/* title bar */}
             <button
                 type="button"
-                onClick={() => setOpen(!expanded)}
+                onClick={toggleExpanded}
                 aria-expanded={expanded}
                 className="map-legend-toggle"
             >
@@ -74,7 +74,7 @@ export default function MapLegend({ hasForecast, hasHindcast, hasEstimated, hasG
 
 
                     </>}
-                    {showProjectedPath && (fleet || hasForecast) && <LegendRow swatch={lineSwatch(L.forecast, true)} label="projected path" />}
+                    {showProjectedPath && !fleet && hasForecast && <LegendRow swatch={lineSwatch(L.forecast, true)} label="projected path" />}
                     {(showGateways || showReceivingStations) && <>
                     <LegendHeading style={{ marginTop: showFlightPaths || showProjectedPath || fleet ? 10 : 0 }}>Gateways</LegendHeading>
                     {hasGateways && showReceivingStations && (
