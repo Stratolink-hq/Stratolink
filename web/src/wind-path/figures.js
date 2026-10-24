@@ -159,6 +159,11 @@ const heading = (title, subtitle) => `<div class="chart-heading fleet-heading">$
 const key = (text, color, shape = 'bar') => `<span class="chart-key"><i class="key-${shape}" style="background:${color}"></i>${text}</span>`;
 const windKey = () => `<span class="chart-key"><i class="spectrum-key"></i>Wind, slow to fast</span>`;
 
+/* The width inside a figure card's padding (narrower padding on phones, see figures.css). */
+function contentWidth(host) {
+  const style = getComputedStyle(host);
+  return Math.floor(host.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+}
 /* Draw-in-and-hold animation for the figures without controls: calls frame(f) with f
  * going 0 → 1 over `duration` ms, holds f = 1 for `hold` ms, and starts again. Runs only
  * while the figure is on screen and the page visible, restarts when it scrolls back into
@@ -230,7 +235,7 @@ async function replay(host, signal) {
     haloLabel(map, last[1], last[2], 'Last fix, May 29', -9, 18);
   }
   minutes = loop(host, signal, { duration: 4500, hold: 2000 }, f => { minutes = f * end; draw(); }) * end;
-  observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
+  observeChartSize(host, () => { map.resize(contentWidth(host)); draw(); }, signal);
 }
 
 /* ── 5. riding the tube ────────────────────────────────────────────────────── */
@@ -317,7 +322,7 @@ async function tube(host, signal) {
   }
   /* five slices a second, then a short hold on the last one */
   at = loop(host, signal, { duration: last * 200, hold: 1500 }, value => { at = value * last; draw(); }) * last;
-  observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
+  observeChartSize(host, () => { map.resize(contentWidth(host)); draw(); }, signal);
 }
 
 /* ── 5b. what the box resolves ─────────────────────────────────────────────── */
@@ -368,7 +373,7 @@ async function resolution(host, signal) {
   /* two and a half slices a second, then a short hold */
   at = loop(host, signal, { duration: last * 400, hold: 1200 }, value => { at = value * last; draw(); }) * last;
   observeChartSize(host, () => {
-    const avail = host.clientWidth - 32, perRow = avail >= 560 ? 3 : 2;
+    const avail = contentWidth(host), perRow = avail >= 560 ? 3 : 2;
     for (const inset of insets) { const w = Math.min(260, Math.floor((avail - 16 * (perRow - 1)) / perRow)); inset.size = w; sizeCanvas(inset.canvas, inset.ctx, w, w); inset.canvas.parentElement.style.width = `${w}px`; }
     draw();
   }, signal);
@@ -403,7 +408,7 @@ async function plain(host, signal) {
     map.dot(w[0], w[1], 4.5, INK, CREAM, 1.2);
   }
   f = loop(host, signal, { duration: 4500, hold: 2500 }, value => { f = value; draw(); });
-  observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
+  observeChartSize(host, () => { map.resize(contentWidth(host)); draw(); }, signal);
 }
 
 /* ── 3. a little noise, a huge spread ──────────────────────────────────────── */
@@ -435,7 +440,7 @@ async function spread(host, signal) {
     haloLabel(map, A[0], A[1], 'May 19', 9, 14); haloLabel(map, B[0], B[1], 'May 28', -9, -10);
   }
   f = loop(host, signal, { duration: 6000, hold: 2500 }, value => { f = value; draw(); });
-  observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
+  observeChartSize(host, () => { map.resize(contentWidth(host)); draw(); }, signal);
 }
 
 /* ── 3b. the few that come close ───────────────────────────────────────────── */
@@ -482,7 +487,7 @@ async function arrive(host, signal) {
     haloLabel(map, A[0], A[1], 'May 19', 9, 14); haloLabel(map, B[0], B[1], 'May 28', 9, -10);
   }
   f = loop(host, signal, { duration: 6000, hold: 3000 }, value => { f = value; draw(); });
-  observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
+  observeChartSize(host, () => { map.resize(contentWidth(host)); draw(); }, signal);
 }
 
 /* ── 4. two clouds meeting in the middle ───────────────────────────────────── */
@@ -520,7 +525,7 @@ async function meeting(host, signal) {
     haloLabel(map, A[0], A[1], 'May 19', 9, 14); haloLabel(map, B[0], B[1], 'May 28', -9, -10);
   }
   f = loop(host, signal, { duration: 7000, hold: 2500 }, value => { f = value; draw(); });
-  observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
+  observeChartSize(host, () => { map.resize(contentWidth(host)); draw(); }, signal);
 }
 
 /* ── 4b. how two halves are matched ────────────────────────────────────────── */
@@ -580,7 +585,7 @@ async function line(host, signal) {
     haloLabel(map, A[0], A[1], 'May 19', 9, 14); haloLabel(map, B[0], B[1], 'May 28', -9, -10);
   }
   f = loop(host, signal, { duration: 7000, hold: 2500 }, value => { f = value; draw(); });
-  observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
+  observeChartSize(host, () => { map.resize(contentWidth(host)); draw(); }, signal);
 }
 
 /* ── 7. where it goes next ─────────────────────────────────────────────────── */
@@ -639,7 +644,7 @@ async function forecast(host, signal) {
     drawChart(hour, spreadAt(s));
   }
   h = loop(host, signal, { duration: 9000, hold: 3000 }, value => { h = value * total; draw(); }) * total;
-  observeChartSize(host, () => { width = host.clientWidth - 32; map.resize(width); draw(); }, signal);
+  observeChartSize(host, () => { width = contentWidth(host); map.resize(width); draw(); }, signal);
 }
 
 const figures = { replay, plain, spread, arrive, meeting, match, line, tube, resolution, forecast };
