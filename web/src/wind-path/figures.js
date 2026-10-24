@@ -661,7 +661,69 @@ async function forecast(host, signal) {
   observeChartSize(host, () => { width = contentWidth(host); map.resize(width); draw(); }, signal);
 }
 
-const figures = { replay, plain, spread, arrive, meeting, match, line, tube, resolution, forecast };
+/* ── 8. how much jitter (appendix) ─────────────────────────────────────────── */
+/* The eight-day gap rerun at 25 heading × speed settings (height spread ±8 hPa). A
+ * grid of the runs, shaded by how well each makes the two fixes agree and labeled
+ * with how far its line sits from today's; selecting a cell maps its paths and line
+ * against today's. No animation: the grid is the control. */
+async function jitter(host, signal) {
+  const [meta, buffer, coast] = await Promise.all([load('jitter.json'), load('jitter.bin'), load('coast-atlantic.json')]);
+  if (signal.aborted) return;
+  const I16 = new Int16Array(buffer), { dirs, speeds, cells, nLine, nDraw, nPt } = meta;
+  const pts = (off, n) => Array.from({ length: n }, (_, k) => [I16[off + 2 * k] / 100, I16[off + 2 * k + 1] / 100]);
+  const lineOf = c => pts(c.off, nLine), drawsOf = c => Array.from({ length: nDraw }, (_, j) => pts(c.off + nLine * 2 + j * nPt * 2, nPt));
+  const at = (d, s) => cells.find(c => c.dir === d && c.speed === s);
+  const today = at(meta.today.dir, meta.today.speed), todayLine = lineOf(today);
+  host.innerHTML = `${heading('How much jitter', `25 settings, height spread ±${meta.pressHpa} hPa`)}
+    <div class="chart-legend">${key('Paths at the chosen setting', BLUE)}${key('Its drawn line', RED)}<span class="chart-key"><i class="key-bar" style="background:repeating-linear-gradient(90deg, ${INK} 0 5px, transparent 5px 9px)"></i>Today’s line, ±${meta.today.dir}° and ±${Math.round(meta.today.speed * 100)}%</span></div>
+    <div class="jitter-layout"><div class="fleet-map-stage"></div><div class="jitter-grid"><svg role="group" aria-label="Runs by heading and speed spread"></svg><p class="jitter-key">Number: how far the line sits from today’s, km. Darker: the two fixes agree better.</p></div></div>
+    <output class="chart-readout"></output>`;
+  const stage = host.querySelector('.fleet-map-stage'), svg = host.querySelector('.jitter-grid svg'), read = host.querySelector('.chart-readout');
+  const map = createMap(GAP_VIEW, 'The eight-day gap at the chosen jitter setting: its sample paths and drawn line, with today’s line dashed for comparison.');
+  stage.prepend(map.canvas);
+  const best = Math.max(...cells.map(c => c.score));
+  /* shade on a log scale: today's agreement sits mid-ramp, the best setting at the dark end */
+  const LIGHT = [227, 235, 241], DARK = [29, 91, 138];
+  const tone = c => clamp(Math.log(c.score) / Math.log(best) * .5 + .5, 0, 1);
+  const shadeOf = c => `rgb(${LIGHT.map((v, i) => Math.round(lerp(v, DARK[i], tone(c)))).join(',')})`;
+  let sel = today;
+  function draw() {
+    if (!map.width) return;
+    map.base(coast);
+    for (const d of drawsOf(sel)) map.line(d, { color: BLUE, width: .9, alpha: .18 });
+    if (sel !== today) map.line(todayLine, { color: INK, width: 1.6, dash: [5, 4], alpha: .85 });
+    map.line(lineOf(sel), { color: RED, width: 2.4 });
+    const A = todayLine[0], B = todayLine[nLine - 1];
+    map.dot(A[0], A[1], 5, CREAM, INK, 1.6); map.dot(B[0], B[1], 5, CREAM, INK, 1.6);
+    haloLabel(map, A[0], A[1], 'May 19', 9, 14); haloLabel(map, B[0], B[1], 'May 28', -9, -10);
+    const cw = 44, ch = 32, L = 56, T = 30, ns = speeds.length;
+    let g = `<text x="${L + dirs.length * cw / 2}" y="10" text-anchor="middle">heading spread</text>`;
+    g += `<text x="9" y="${T + ns * ch / 2}" text-anchor="middle" transform="rotate(-90 9 ${T + ns * ch / 2})">speed spread</text>`;
+    dirs.forEach((d, i) => { g += `<text x="${L + i * cw + cw / 2}" y="${T - 6}" text-anchor="middle">±${d}°</text>`; });
+    speeds.forEach((s, j) => {
+      const y = T + (ns - 1 - j) * ch;
+      g += `<text x="${L - 5}" y="${y + ch / 2 + 4}" text-anchor="end">±${Math.round(s * 100)}%</text>`;
+      dirs.forEach((d, i) => {
+        const c = at(d, s), x = L + i * cw, dark = tone(c) > .55, on = c === sel;
+        g += `<rect class="jitter-cell" tabindex="0" role="button" aria-pressed="${on}" aria-label="Heading ±${d}°, speed ±${Math.round(s * 100)}%: line ${c === today ? 'is today’s' : `moves ${c.shiftMed} km from today’s`}" data-i="${cells.indexOf(c)}" x="${x + 1}" y="${y + 1}" width="${cw - 2}" height="${ch - 2}" rx="4" fill="${shadeOf(c)}" stroke="${on ? INK : 'none'}" stroke-width="2.2"/>`;
+        g += `<text x="${x + cw / 2}" y="${y + ch / 2 + 4}" text-anchor="middle" style="fill:${dark ? CREAM : INK};pointer-events:none">${c === today ? 'today' : c.shiftMed}</text>`;
+      });
+    });
+    svg.setAttribute('viewBox', `0 0 ${L + dirs.length * cw + 2} ${T + ns * ch + 2}`);
+    svg.innerHTML = g;
+    svg.querySelectorAll('.jitter-cell').forEach(el => {
+      const go = () => { sel = cells[+el.dataset.i]; draw(); };
+      el.onclick = go; el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
+    });
+    const what = `±${sel.dir}° heading, ±${Math.round(sel.speed * 100)}% speed`;
+    read.textContent = sel === today
+      ? `${what}, today’s settings: corridor ${fmt(sel.r90)} km wide mid-gap; rerunning them alone moves the line about ${meta.noise.median} km typical, ${meta.noise.max} km at most. Select a cell to compare.`
+      : `${what}: the line sits ${fmt(sel.shiftMed)} km from today’s typical, ${fmt(sel.shiftMax)} km at most; corridor ${fmt(sel.r90)} km wide mid-gap${sel.split ? ', and the paths split into separate routes' : ''}; the fixes agree ${fmt(sel.score, 1)}× as well as today.`;
+  }
+  observeChartSize(host, () => { map.resize(Math.floor(stage.clientWidth)); draw(); }, signal);
+}
+
+const figures = { replay, plain, spread, arrive, meeting, match, line, tube, resolution, forecast, jitter };
 
 export function mountFigures(root, signal) {
   const observer = new IntersectionObserver(entries => {
