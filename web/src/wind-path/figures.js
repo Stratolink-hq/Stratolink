@@ -8,7 +8,10 @@ import { colors, heatColor, observeChartSize } from '../payload-dev-log/charts.j
 
 const ASSETS = '/assets/wind-path';
 const INK = '#292927', PAPER = '#eeeee9', GRID = '#d7d8d1', COAST = '#959c93', CREAM = '#f6f4ef';
-const RED = colors[0], ORANGE = colors[1], BLUE = colors[4], GRAY = '#6f716b';
+const RED = colors[0], BLUE = colors[4], GRAY = '#6f716b';
+/* The forecast's two models: a teal and a violet chosen to stay apart under colour-vision
+ * deficiency (OKLab ΔE ≥ 11 simulated for deutan, protan and tritan) and from RED. */
+const GEFS_COLOR = '#1f8f8a', AIGEFS_COLOR = '#7a5cc8';
 const rad = Math.PI / 180, R = 6371;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -607,7 +610,7 @@ async function forecast(host, signal) {
   const [f, buffer, coast] = await Promise.all([load('forecast.json'), load('forecast.bin'), load('/assets/payload-dev-log/coastlines.json')]);
   if (signal.aborted) return;
   const pos = new Int16Array(buffer), { members, steps, hours, spreadKm, median, thresholdKm } = f,
-    colorOf = m => (f.models?.[m] === 'aigefs' ? ORANGE : BLUE), total = hours[steps - 1], stepH = hours[1] - hours[0];
+    colorOf = m => (f.models?.[m] === 'aigefs' ? AIGEFS_COLOR : GEFS_COLOR), total = hours[steps - 1], stepH = hours[1] - hours[0];
   const at = (m, s) => {
     const a = Math.floor(s), b = Math.min(steps - 1, a + 1), t = s - a, ia = (m * steps + a) * 2, ib = (m * steps + b) * 2;
     let dl = pos[ib + 1] - pos[ia + 1]; if (dl > 18000) dl -= 36000; if (dl < -18000) dl += 36000;
@@ -615,7 +618,7 @@ async function forecast(host, signal) {
   };
   const spreadAt = s => { const a = Math.floor(s), b = Math.min(steps - 1, a + 1); return spreadKm[a] + (spreadKm[b] - spreadKm[a]) * (s - a); };
   host.innerHTML = `${heading('Where it goes next', `${members} members: ${f.gefs} GEFS, ${f.aigefs} AIGEFS`)}
-    <div class="chart-legend">${key(`${f.gefs} GEFS members`, BLUE)}${key(`${f.aigefs} AIGEFS members`, ORANGE)}${key('Median path, the drawn forecast', INK)}${key('Forecast ends', RED, 'diamond')}</div>
+    <div class="chart-legend">${key(`${f.gefs} GEFS members`, GEFS_COLOR)}${key(`${f.aigefs} AIGEFS members`, AIGEFS_COLOR)}${key('Median path, the drawn forecast', INK)}${key('Forecast ends', RED, 'diamond')}</div>
     <div class="fleet-map-stage"></div>
     <div class="chart-stage"><svg class="spread-chart" role="img" aria-label="Ensemble spread against forecast day, with the 2,000 km stopping threshold"></svg></div>`;
   const map = createMap(WORLD, 'Sixty-two ensemble trajectories from the last fix in Spain eastward around the world, and their spread against the 2,000 km threshold where the forecast stops.');
