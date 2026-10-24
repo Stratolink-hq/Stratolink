@@ -9,9 +9,6 @@ import { colors, heatColor, observeChartSize } from '../payload-dev-log/charts.j
 const ASSETS = '/assets/wind-path';
 const INK = '#292927', PAPER = '#eeeee9', GRID = '#d7d8d1', COAST = '#959c93', CREAM = '#f6f4ef';
 const RED = colors[0], BLUE = colors[4], GRAY = '#6f716b';
-/* The forecast's two models: a teal and a violet chosen to stay apart under colour-vision
- * deficiency (OKLab ΔE ≥ 11 simulated for deutan, protan and tritan) and from RED. */
-const GEFS_COLOR = '#1f8f8a', AIGEFS_COLOR = '#7a5cc8';
 const rad = Math.PI / 180, R = 6371;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -610,7 +607,8 @@ async function forecast(host, signal) {
   const [f, buffer, coast] = await Promise.all([load('forecast.json'), load('forecast.bin'), load('/assets/payload-dev-log/coastlines.json')]);
   if (signal.aborted) return;
   const pos = new Int16Array(buffer), { members, steps, hours, spreadKm, median, thresholdKm } = f,
-    colorOf = m => (f.models?.[m] === 'aigefs' ? AIGEFS_COLOR : GEFS_COLOR), total = hours[steps - 1], stepH = hours[1] - hours[0];
+    /* GEFS blue, AIGEFS red: the forward/backward colors of the other figures */
+    colorOf = m => (f.models?.[m] === 'aigefs' ? RED : BLUE), total = hours[steps - 1], stepH = hours[1] - hours[0];
   const at = (m, s) => {
     const a = Math.floor(s), b = Math.min(steps - 1, a + 1), t = s - a, ia = (m * steps + a) * 2, ib = (m * steps + b) * 2;
     let dl = pos[ib + 1] - pos[ia + 1]; if (dl > 18000) dl -= 36000; if (dl < -18000) dl += 36000;
@@ -618,7 +616,7 @@ async function forecast(host, signal) {
   };
   const spreadAt = s => { const a = Math.floor(s), b = Math.min(steps - 1, a + 1); return spreadKm[a] + (spreadKm[b] - spreadKm[a]) * (s - a); };
   host.innerHTML = `${heading('Where it goes next', `${members} members: ${f.gefs} GEFS, ${f.aigefs} AIGEFS`)}
-    <div class="chart-legend">${key(`${f.gefs} GEFS members`, GEFS_COLOR)}${key(`${f.aigefs} AIGEFS members`, AIGEFS_COLOR)}${key('Median path, the drawn forecast', INK)}${key('Forecast ends', RED, 'diamond')}</div>
+    <div class="chart-legend">${key(`${f.gefs} GEFS members`, BLUE)}${key(`${f.aigefs} AIGEFS members`, RED)}${key('Median path, the drawn forecast', INK)}${key('Forecast ends', INK, 'diamond')}</div>
     <div class="fleet-map-stage"></div>
     <div class="chart-stage"><svg class="spread-chart" role="img" aria-label="Ensemble spread against forecast day, with the 2,000 km stopping threshold"></svg></div>`;
   const map = createMap(WORLD, 'Sixty-two ensemble trajectories from the last fix in Spain eastward around the world, and their spread against the 2,000 km threshold where the forecast stops.');
@@ -633,8 +631,8 @@ async function forecast(host, signal) {
     for (const v of [0, 1000, 2000]) svg.append(el('line', { x1: L, x2: w - Rm, y1: sy(v), y2: sy(v), class: 'grid-line' }), el('text', { x: L - 7, y: sy(v) + 4, 'text-anchor': 'end', class: 'tick' }, v ? `${fmt(v / 1000, 0)}k km` : '0'));
     for (let d = 0; d <= total / 24; d += 2) svg.append(el('text', { x: sx(d * 24), y: ht - 10, 'text-anchor': 'middle', class: 'tick' }, `day ${d}`));
     svg.append(el('text', { x: L, y: 10, class: 'axis-label' }, 'Spread around the median'));
-    svg.append(el('line', { x1: L, x2: w - Rm, y1: sy(thresholdKm), y2: sy(thresholdKm), stroke: RED, 'stroke-dasharray': '4 4' }));
-    svg.append(el('text', { x: w - Rm, y: sy(thresholdKm) - 6, 'text-anchor': 'end', class: 'tick', fill: RED }, 'forecast stops'));
+    svg.append(el('line', { x1: L, x2: w - Rm, y1: sy(thresholdKm), y2: sy(thresholdKm), stroke: INK, 'stroke-dasharray': '4 4' }));
+    svg.append(el('text', { x: w - Rm, y: sy(thresholdKm) - 6, 'text-anchor': 'end', class: 'tick', fill: INK }, 'forecast stops'));
     svg.append(el('path', { d: spreadKm.map((v, k) => `${k ? 'L' : 'M'}${sx(hours[k])},${sy(v)}`).join(' '), fill: 'none', stroke: GRAY, 'stroke-width': 2.2 }));
     svg.append(el('line', { x1: sx(hour), x2: sx(hour), y1: T, y2: ht - B, stroke: '#29292766', 'stroke-dasharray': '3 4' }));
     svg.append(el('circle', { cx: sx(hour), cy: sy(spread), r: 4, fill: GRAY, stroke: CREAM, 'stroke-width': 2 }));
@@ -656,8 +654,8 @@ async function forecast(host, signal) {
     haloLabel(map, f.lastFix[0], f.lastFix[1], 'Last fix, May 29', 9, 18);
     if (done) {
       const [x, y] = map.point(f.divergence.lat, f.divergence.lon);
-      ctx.fillStyle = RED; ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.fill();
-      haloLabel(map, f.divergence.lat, f.divergence.lon, `forecast ends: spread ${fmt(spreadKm[steps - 1])} km`, -11, -10, { color: RED });
+      ctx.fillStyle = INK; ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.fill();
+      haloLabel(map, f.divergence.lat, f.divergence.lon, `forecast ends: spread ${fmt(spreadKm[steps - 1])} km`, -11, -10);
     }
     drawChart(hour, spreadAt(s));
   }
