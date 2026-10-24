@@ -270,7 +270,19 @@ export default function V2MissionMap({
     useEffect(() => {
         const container = mapContainerRef.current;
         if (!container) return;
-        const observer = new ResizeObserver(() => mapRef.current?.resize());
+        let previousSpan: number | null = null;
+        const observer = new ResizeObserver(() => {
+            const map = mapRef.current;
+            if (!map) return;
+            const mobileDrawer = container.closest('[data-mobile-drawer="true"]');
+            const span = Math.max(60, Math.min(container.clientWidth, container.clientHeight - 84));
+            const zoom = map.getZoom();
+            map.resize();
+            if (mobileDrawer && document.documentElement.dataset.globePortal !== 'entering' && previousSpan !== null && previousSpan !== span) {
+                map.jumpTo({ zoom: zoom + Math.log2(span / previousSpan) });
+            }
+            previousSpan = mobileDrawer ? span : null;
+        });
         observer.observe(container);
         return () => observer.disconnect();
     }, [webglOk]);
@@ -458,13 +470,14 @@ export default function V2MissionMap({
             ? `fleet:${JSON.stringify(validFleetFitBalloons.map(balloon => balloon.id).sort())}`
             : `device:${activeId}`;
         if (fittedActiveRef.current === fitKey) return;
+        const fit = () => {
         map.resize();
 
         /* The very first fit (e.g. after balloon data arrives post-mount) should
          * snap instantly — animating would show the fallback view and then rotate/
          * zoom over to the balloon. Later device switches animate. */
         const firstFit = fittedActiveRef.current === undefined;
-        const fitDuration = firstFit ? 0 : 1200;
+        const fitDuration = firstFit || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1200;
 
         /* Keep camera updates out of uncaught rejects from mapbox-gl. */
         try {
@@ -515,7 +528,13 @@ export default function V2MissionMap({
         } catch (e) {
             console.warn('V2MissionMap camera update skipped', e);
         }
-    }, [autoFit, preserveCamera, styleLoaded, activeId, validBalloons, validFleetFitBalloons, rangeCenter]);
+        };
+        if (mapContainerRef.current?.closest('[data-mobile-drawer="true"]')) {
+            const timer = window.setTimeout(fit, 340);
+            return () => window.clearTimeout(timer);
+        }
+        fit();
+    }, [autoFit, preserveCamera, styleLoaded, activeId, validBalloons, validFleetFitBalloons, rangeCenter, wideZoom]);
 
     /* Range-mode camera: fit to the SF12 ring around the balloon. Keyed on
      * activeId so it fits once on entering range mode (and on device change),

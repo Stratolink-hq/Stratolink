@@ -21,6 +21,13 @@ for (const scheme of ['light', 'dark']) {
   const stock = await response.json();
   const missing = KEEP.filter(id => !stock.layers.some(layer => layer.id === id));
   if (missing.length) throw new Error(`${scheme}-v11 lacks ${missing.join(', ')}`);
+  // Ocean depth has a lower maximum zoom than streets and must overzoom
+  // independently. bathymetry.ts adds its dedicated source.
+  for (const source of Object.values(stock.sources)) {
+    if (source.type === 'vector' && source.url?.startsWith('mapbox://')) {
+      source.url = 'mapbox://' + source.url.slice(9).split(',').filter(id => id !== 'mapbox.mapbox-bathymetry-v2').join(',');
+    }
+  }
   const style = {
     version: 8,
     name: `stratolink-${scheme}`,

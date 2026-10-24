@@ -5,11 +5,11 @@ const uid='00000000-0000-4000-8000-000000000001';
 const bid='balloon-00000000-0000-4000-8000-000000000010';
 const user={id:uid,identities:[{provider:'github',identity_data:{sub:'123456',user_name:'test-owner'}}]};
 const balloon={id:bid,ownerId:uid,callsign:'Test',status:'planned',devEui:'1234567890ABCDEF',connections:[],connectionStatus:'pending'};
-function fixture({authUser=user,owned=[balloon],verifyDevice,rate=true,rpcError=null,environment={}}={}) {
+function fixture({authUser=user,owned=[balloon],verifyDevice,readForecast,rate=true,rpcError=null,environment={}}={}) {
  const calls=[];
  let databaseCalls=0;
  const db={auth:{async getUser(){return {data:{user:authUser},error:null};}},async rpc(name,args){calls.push({name,args});return {data:name==='community_account'?owned:name==='community_rate_limit'?rate:balloon,error:rpcError};}};
- const api=createCommunityApi({createDb:()=>{databaseCalls++;return db;},environment:{SITE_URL:'https://stratolink.org',AUTH_ALLOWED_ORIGINS:'http://127.0.0.1:4173',COMMUNITY_REGISTRATION_ENABLED:'true',...environment},verifyDevice});
+ const api=createCommunityApi({createDb:()=>{databaseCalls++;return db;},environment:{SITE_URL:'https://stratolink.org',AUTH_ALLOWED_ORIGINS:'http://127.0.0.1:4173',COMMUNITY_REGISTRATION_ENABLED:'true',...environment},verifyDevice,readForecast});
  const request=(path,method='GET',body,headers={})=>api(new Request(`http://localhost${path}`,{method,headers:{Authorization:'Bearer test-token-with-enough-characters',Origin:'https://stratolink.org','Content-Type':'application/json',...headers},...(body!==undefined?{body:typeof body==='string'?body:JSON.stringify(body)}:{})}));
  return {request,calls,get databaseCalls(){return databaseCalls;}};
 }
@@ -208,3 +208,17 @@ test('only owners and verified co-owners can edit planned dates and sharing, inc
  assert.equal(outsider.calls.some(c=>c.name==='update_balloon_settings'),false);
  assert.equal((await f.request(`/api/balloons/${bid}`,'PATCH',{...input,ownerId:uid})).status,400);
 });
+
+ test('missing freezes a server-derived forecast only after ownership is checked', async () => {
+ const forecast={forecast_origin:{time_utc:'2020-01-01T00:00:00Z'},forecast_horizon_h:1,nominal_path:[[10,20],[11,21]]};
+ const f=fixture({owned:[{...balloon,status:'flying'}],readForecast:async()=>forecast});
+ assert.equal((await f.request(`/api/balloons/${bid}`,'PATCH',{status:'missing'})).status,200);
+ assert.deepEqual(f.calls.find(c=>c.name==='mark_balloon_missing').args.p_position,{lon:11,lat:21,t:Date.parse('2020-01-01T01:00:00Z')});
+ const denied=fixture({owned:[],readForecast:async()=>{throw new Error('Must not read');}});
+ assert.equal((await denied.request(`/api/balloons/${bid}`,'PATCH',{status:'missing'})).status,404);
+ });
+ test('failed forecast read does not partially change a flying balloon status', async () => {
+ const f=fixture({owned:[{...balloon,status:'flying'}],readForecast:async()=>{throw new Error('offline');}});
+ assert.equal((await f.request(`/api/balloons/${bid}`,'PATCH',{status:'missing'})).status,503);
+ assert.equal(f.calls.some(c=>c.name==='mark_balloon_missing'),false);
+ });

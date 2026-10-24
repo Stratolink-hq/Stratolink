@@ -13,7 +13,6 @@
  * Idempotent — safe to call on every `styledata` event.
  */
 import type { Map, LayerSpecification } from 'mapbox-gl';
-import { ensureVectorSource } from './vectorSource';
 
 const SRC_ID = 'sl-bathymetry-v2';
 const LAYER_ID = 'sl-bathymetry-v2';
@@ -110,9 +109,16 @@ export function bathymetryAllZooms(map: Map, scheme: Scheme = 'light'): void {
         } catch { /* ignore */ }
     }
 
-    let source: string;
-    try { source = ensureVectorSource(map, SRC_ID, 'mapbox.mapbox-bathymetry-v2'); }
-    catch { return; }
+    // Bathymetry ends at z7. A composite source inherits the streets' z16
+    // limit, so it can request tiles without depth geometry instead of
+    // overzooming the last available ocean tile.
+    const source = SRC_ID;
+    try {
+        if (!map.getSource(source)) map.addSource(source, {
+            type: 'vector', url: 'mapbox://mapbox.mapbox-bathymetry-v2',
+            minzoom: 0, maxzoom: 7,
+        });
+    } catch { return; }
 
     try {
         if (!map.getLayer(LAYER_ID)) {

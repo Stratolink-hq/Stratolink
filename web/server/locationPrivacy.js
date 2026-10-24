@@ -24,7 +24,7 @@ export function sanitizeTelemetry(row) {
 }
 export function sanitizeDevice(row) {
   const position = publicPosition(row.launch_lat, row.launch_lon);
-  return { ...row, launch_lat: position.lat, launch_lon: position.lon, location_approximate: position.location_approximate ?? false };
+  return { ...row, frozen_position: row.frozen_position ? { ...row.frozen_position, ...publicPosition(row.frozen_position.lat, row.frozen_position.lon) } : null, launch_lat: position.lat, launch_lon: position.lon, location_approximate: position.location_approximate ?? false };
 }
 function sanitizeGeometry(value) {
   if (Array.isArray(value)) {
