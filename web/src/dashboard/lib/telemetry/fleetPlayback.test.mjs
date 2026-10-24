@@ -80,7 +80,7 @@ test('scrubbing never changes packet order, coordinates, or values', () => {
     assert.deepEqual(rows, before);
 });
 
-test('fleet counts only recently transmitting, unfinished missions as active', async () => {
+test('fleet counts marked flying missions regardless of reception age', async () => {
     const { fleetActivity } = await import('./fleetPlayback.ts');
     const now = 2_000_000;
     const devices = [
@@ -91,8 +91,8 @@ test('fleet counts only recently transmitting, unfinished missions as active', a
     ];
     assert.deepEqual(fleetActivity(devices, {
         recent: [packet(now - 1000)], old: [packet(now - 900_000)], landed: [packet(now - 1000)],
-    }, now), { active: 1, inactive: 3 });
-    assert.deepEqual(fleetActivity(devices, {}, now), { active: 0, inactive: 4 });
+    }, now), { active: 3, inactive: 1 });
+    assert.deepEqual(fleetActivity(devices, {}, now), { active: 3, inactive: 1 });
 });
 
 test('homepage globe prioritizes active flights and falls back to recorded balloons', async () => {
@@ -100,8 +100,8 @@ test('homepage globe prioritizes active flights and falls back to recorded ballo
     const devices = [{ id: 'active', status: 'flying' }, { id: 'past', status: 'landed' }, { id: 'new', status: 'idle' }];
     const rows = { active: [packet(1_999_000)], past: [packet(1000)] };
     assert.deepEqual(previewFleet(devices, rows, 2_000_000).map(d => d.id), ['active']);
-    assert.deepEqual(previewFleet(devices, rows, 4_000_000).map(d => d.id), ['active', 'past']);
-    assert.deepEqual(previewFleet(devices, {}, 4_000_000), []);
+    assert.deepEqual(previewFleet(devices, rows, 4_000_000).map(d => d.id), ['active']);
+    assert.deepEqual(previewFleet(devices, {}, 4_000_000).map(d => d.id), ['active']);
 });
 
 test('binary replay matches packet boundaries throughout a long flight and after refresh', () => {

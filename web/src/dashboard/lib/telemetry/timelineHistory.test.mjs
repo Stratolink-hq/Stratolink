@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { adjacentPacketTime, historyRange } from './timelineHistory.ts';
+import { adjacentPacketTime, createRail, flightSpans, historyRange } from './timelineHistory.ts';
 
 const rows = times => times.map(t => ({ t }));
 
@@ -41,4 +41,45 @@ test('range and keyboard lookup inspect endpoints and logarithmic candidates, no
     reads = 0;
     assert.equal(adjacentPacketTime(histories, 500000, 'next'), 500001);
     assert.ok(reads < 1600, `inspected ${reads} timestamps`);
+});
+
+test('flight spans start at launch, run to the last packet or live estimate, and merge close flights', () => {
+    const h = 3_600_000;
+    assert.deepEqual(flightSpans([
+        { launchT: 100 * h, rows: rows([50 * h, 100 * h, 200 * h]) },
+        { launchT: null, rows: rows([0, 1000 * h]) },
+        { launchT: 900 * h, rows: rows([900 * h, 950 * h]), liveUntil: 1200 * h },
+        { launchT: 5, rows: [] },
+    ]), [{ start: 100 * h, end: 200 * h }, { start: 900 * h, end: 1200 * h }]);
+    assert.deepEqual(flightSpans([{ launchT: 0, rows: rows([h]) }, { launchT: 13 * h + 1, rows: rows([14 * h]) }]).length, 2);
+    assert.deepEqual(flightSpans([{ launchT: 0, rows: rows([h]) }, { launchT: 12 * h, rows: rows([14 * h]) }]), [{ start: 0, end: 14 * h }]);
+});
+
+test('a rail over one span is the plain linear scrubber', () => {
+    const rail = createRail([{ start: 100, end: 200 }]);
+    assert.equal(rail.toFrac(150), 0.5);
+    assert.equal(rail.toFrac(50), 0);
+    assert.equal(rail.toFrac(300), 1);
+    assert.equal(rail.toTime(0.25), 125);
+    assert.equal(rail.snap(150, 'next'), 150);
+});
+
+test('a rail leaves out the time between spans and round-trips within them', () => {
+    const rail = createRail([{ start: 0, end: 1000 }, { start: 100_000, end: 101_000 }]);
+    const [a, b] = rail.spans;
+    assert.equal(a.from, 0);
+    assert.equal(b.to, 1);
+    assert.ok(b.from - a.to > 0 && b.from - a.to < 0.05, 'a short break, not 99 seconds of nothing');
+    assert.ok(Math.abs((a.to - a.from) - (b.to - b.from)) < 1e-9, 'equal flights get equal rail');
+    for (const t of [0, 250, 1000, 100_000, 100_500, 101_000]) assert.ok(Math.abs(rail.toTime(rail.toFrac(t)) - t) < 1e-6, String(t));
+    assert.equal(rail.toFrac(50_000), b.from, 'time between flights sits at the next one');
+    assert.equal(rail.toTime(a.to + 0.001), 1000);
+    assert.equal(rail.toTime(b.from - 0.001), 100_000);
+    assert.equal(rail.snap(50_000, 'next'), 100_000);
+    assert.equal(rail.snap(50_000, 'previous'), 1000);
+});
+
+test('a short flight beside a long one keeps a usable share of the rail', () => {
+    const rail = createRail([{ start: 0, end: 1_000_000 }, { start: 2_000_000, end: 2_001_000 }]);
+    assert.ok(Math.abs((rail.spans[1].to - rail.spans[1].from) - 0.15 * 0.985) < 1e-9);
 });

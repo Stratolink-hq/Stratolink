@@ -9,6 +9,7 @@ import { shouldPollTelemetry } from '@/lib/telemetry/fleetSummary';
 import type { TelemetryRow } from './atoms';
 
 interface DeviceSummary {
+    frozenPosition?: { lon: number; lat: number; t: number } | null;
     ownerGithub?: string;
     ownerId?: string;
     managedByUserId?: string;
@@ -29,7 +30,7 @@ interface DeviceSummary {
     latestFix: { lat: number; lon: number; alt: number | null; t: number } | null;
 }
 
-const FULL_TELEMETRY_COLUMNS =
+export const FULL_TELEMETRY_COLUMNS =
     'time, lat, lon, altitude_m, battery_voltage, solar_voltage, temperature, pressure, ' +
     'rssi, snr, gps_speed, gps_heading, gps_satellites, mems_accel_x, mems_accel_y, mems_accel_z, ' +
     'velocity_x, velocity_y, ' +
@@ -201,7 +202,7 @@ export function useTelemetry({ initialSelectedId = null }: { initialSelectedId?:
             try {
                 const { data, error } = await createClient()
                     .from('devices')
-                    .select('device_id, launcher_name, status, launch_lat, launch_lon, launched_at, display_name, owner_github, official, connection_status, planned_launch_date')
+                    .select('device_id, launcher_name, status, launch_lat, launch_lon, launched_at, display_name, owner_github, official, connection_status, planned_launch_date, frozen_position')
                     .order('device_id', { ascending: true });
                 if (error) throw error;
                 if (cancelled) return;
@@ -214,6 +215,7 @@ export function useTelemetry({ initialSelectedId = null }: { initialSelectedId?:
                         connectionStatus: device.connection_status,
                         ownerGithub: device.owner_github ?? undefined,
                         status: device.status,
+                        frozenPosition: device.frozen_position ?? null,
                         plannedLaunchDate: device.planned_launch_date ?? null,
                         launchedAt: device.launched_at ? new Date(device.launched_at).getTime() : null,
                         launchLat: device.launch_lat ?? null,

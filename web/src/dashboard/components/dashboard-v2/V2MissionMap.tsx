@@ -111,7 +111,8 @@ interface V2MissionMapProps {
     showFlightPaths?: boolean;
     showFlightTails?: boolean;
     showProjectedPath?: boolean;
-    fleetForecastIds?: string[];
+    /** Each GPS-dark balloon's estimated path from its last fix to its marker. */
+    fleetEstimates?: Array<{ drift: Array<[number, number]>; ahead: Array<[number, number]> }>;
     /** When set, the auto-fit camera only considers flight-path points with
      *  `t <= playbackT` (so the view frames the flown-so-far track). Transmit
      *  dots are always drawn regardless. */
@@ -178,9 +179,9 @@ interface V2MissionMapProps {
      *  the window at all zooms; the globe simply centers higher. The visible
      *  lift is ~half this value. 0 = canvas fills its window exactly. */
     liftPx?: number;
-    /** Zoom used for the wide "world-scale" default view — initial mount and the
-     *  auto-fit onto the active balloon. Mobile passes a lower value to load a bit
-     *  more zoomed out. Defaults to 2.5. */
+    /** Zoom used for the default view — initial mount and the auto-fit onto the
+     *  active balloon's recent position. Mobile passes a lower value to load a bit
+     *  more zoomed out. Defaults to 7 (a regional view, a few hundred km across). */
     wideZoom?: number;
 }
 
@@ -201,6 +202,12 @@ function isWebGLAvailable(): boolean {
     }
 }
 
+/* A #rrggbb palette color at partial opacity; Mapbox styles don't take #rrggbbaa. */
+function withAlpha(hex: string, alpha: number) {
+    const value = parseInt(hex.slice(1), 16);
+    return `rgba(${value >> 16}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}
+
 export default function V2MissionMap({
     balloons,
     activeId = null,
@@ -215,7 +222,7 @@ export default function V2MissionMap({
     showFlightPaths = true,
     showFlightTails = false,
     showProjectedPath = true,
-    fleetForecastIds = [],
+    fleetEstimates = [],
     playbackT = null,
     autoFit = true,
     preserveCamera = false,
@@ -237,7 +244,7 @@ export default function V2MissionMap({
     terminatorDate = null,
     terminatorScrubbing = false,
     liftPx = 0,
-    wideZoom = 2.5,
+    wideZoom = 7,
 }: V2MissionMapProps) {
     const globeStage = useGlobePortal();
     mark('v2render');
@@ -263,7 +270,19 @@ export default function V2MissionMap({
     useEffect(() => {
         const container = mapContainerRef.current;
         if (!container) return;
-        const observer = new ResizeObserver(() => mapRef.current?.resize());
+        let previousSpan: number | null = null;
+        const observer = new ResizeObserver(() => {
+            const map = mapRef.current;
+            if (!map) return;
+            const mobileDrawer = container.closest('[data-mobile-drawer="true"]');
+            const span = Math.max(60, Math.min(container.clientWidth, container.clientHeight - 84));
+            const zoom = map.getZoom();
+            map.resize();
+            if (mobileDrawer && document.documentElement.dataset.globePortal !== 'entering' && previousSpan !== null && previousSpan !== span) {
+                map.jumpTo({ zoom: zoom + Math.log2(span / previousSpan) });
+            }
+            previousSpan = mobileDrawer ? span : null;
+        });
         observer.observe(container);
         return () => observer.disconnect();
     }, [webglOk]);
@@ -329,7 +348,9 @@ export default function V2MissionMap({
         type: 'Feature' as const, properties: {},
         geometry: { type: 'LineString' as const, coordinates: unwrapLngs(validFlightPath.map(point => [point.lon, point.lat])) },
     } : null, [validFlightPath]);
-    const tailSources = useMemo(() => showFlightTails ? fleetTailSources(fleetPaths, playbackT) : [],
+    /* The whole flight up to the cursor, not just the last day: a balloon's
+     * marker always has its path behind it. */
+    const tailSources = useMemo(() => showFlightTails ? fleetTailSources(fleetPaths, playbackT, Infinity) : [],
         [fleetPaths, playbackT, showFlightTails]);
     const fleetColors = useMemo(
         () => new globalThis.Map(fleetPaths.map(path => [path.deviceId, path.color])),
@@ -449,13 +470,14 @@ export default function V2MissionMap({
             ? `fleet:${JSON.stringify(validFleetFitBalloons.map(balloon => balloon.id).sort())}`
             : `device:${activeId}`;
         if (fittedActiveRef.current === fitKey) return;
+        const fit = () => {
         map.resize();
 
         /* The very first fit (e.g. after balloon data arrives post-mount) should
          * snap instantly — animating would show the fallback view and then rotate/
          * zoom over to the balloon. Later device switches animate. */
         const firstFit = fittedActiveRef.current === undefined;
-        const fitDuration = firstFit ? 0 : 1200;
+        const fitDuration = firstFit || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1200;
 
         /* Keep camera updates out of uncaught rejects from mapbox-gl. */
         try {
@@ -499,14 +521,20 @@ export default function V2MissionMap({
                 map.fitBounds([[minLon, minLat], [maxLon, maxLat]] as LngLatBoundsLike, {
                     padding: pad(60),
                     duration: fitDuration,
-                    maxZoom: 5,
+                    maxZoom: wideZoom,   /* a tightly clustered fleet lands at the same regional zoom as a single balloon */
                 });
             }
             fittedActiveRef.current = fitKey;
         } catch (e) {
             console.warn('V2MissionMap camera update skipped', e);
         }
-    }, [autoFit, preserveCamera, styleLoaded, activeId, validBalloons, validFleetFitBalloons, rangeCenter]);
+        };
+        if (mapContainerRef.current?.closest('[data-mobile-drawer="true"]')) {
+            const timer = window.setTimeout(fit, 340);
+            return () => window.clearTimeout(timer);
+        }
+        fit();
+    }, [autoFit, preserveCamera, styleLoaded, activeId, validBalloons, validFleetFitBalloons, rangeCenter, wideZoom]);
 
     /* Range-mode camera: fit to the SF12 ring around the balloon. Keyed on
      * activeId so it fits once on entering range mode (and on device change),
@@ -984,14 +1012,13 @@ export default function V2MissionMap({
                                     paint={{
                                         'line-width': 2.5,
                                         'line-opacity': ['get', 'opacity'],
-                                        'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, 'rgba(0,0,0,0)', 1, source.color],
+                                        /* Older flight fades but never vanishes. */
+                                        'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, withAlpha(source.color, 0.25), 1, source.color],
                                     }}
                                 />
                             </Source>
                         ))}
-                        {showProjectedPath && fleetForecastIds.length > 0 && (
-                            <FleetProjections deviceIds={fleetForecastIds} color={C.forecast} />
-                        )}
+                        {showProjectedPath && fleetEstimates.length > 0 && <FleetProjections legs={fleetEstimates} />}
                         {showFlightPaths && !hindcastGeoJSON && observedPath && (
                             <Source id="v2-observed-path" type="geojson" data={observedPath}>
                                 <Layer id="v2-observed-path-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}

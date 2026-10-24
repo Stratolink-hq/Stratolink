@@ -43,7 +43,7 @@ try {
   }
   assert.ok(ready, 'Disposable PostgreSQL did not start');
   sql(readFileSync(new URL('supabase/tests/baseline.sql', root), 'utf8'));
-  for (const name of ['20261007003455_community_backend.sql', '20261007003501_telemetry_ingest_contract.sql', '20261007201932_payload_claim_compatibility.sql', '20261008194242_official_team_ownership.sql', '20261009030358_balloon_registration_planning.sql']) {
+  for (const name of ['20261007003455_community_backend.sql', '20261007003501_telemetry_ingest_contract.sql', '20261007201932_payload_claim_compatibility.sql', '20261008194242_official_team_ownership.sql', '20261009030358_balloon_registration_planning.sql', '20261024000000_freeze_missing_balloon_position.sql']) {
     sql(readFileSync(new URL(`supabase/migrations/${name}`, root), 'utf8'));
   }
   assert.equal(sql('SELECT count(*) FROM public.telemetry'), '1513');
@@ -209,6 +209,16 @@ try {
   denied("SET ROLE authenticated; SELECT public.st_estimatedextent('telemetry','lat');");
   assert.equal(service("SELECT public.st_estimatedextent('telemetry','lat')"), 'test');
   console.log('PASS: PostGIS hardening is independent, fails without owner authority and preserves service access');
+  const frozenBalloon = balloon(owners[0], 'Snapshot test', 'FEED123400005678');
+  service(`SELECT public.update_community_balloon('${owners[0]}',${literal(frozenBalloon.id)},'flying')`);
+  const snapshot = {lat:29,lon:-115,t:1792800000000};
+  assert.equal(service(`SELECT public.mark_balloon_missing('${owners[1]}',${literal(frozenBalloon.id)},${literal(JSON.stringify(snapshot))}) IS NULL`), 't');
+  service(`SELECT public.mark_balloon_missing('${owners[0]}',${literal(frozenBalloon.id)},${literal(JSON.stringify(snapshot))})`);
+  service(`SELECT public.mark_balloon_missing('${owners[0]}',${literal(frozenBalloon.id)},NULL)`);
+  assert.deepEqual(JSON.parse(service(`SELECT frozen_position FROM public.devices WHERE device_id=${literal(frozenBalloon.id)}`)), snapshot);
+  assert.equal(service(`SELECT status FROM public.devices WHERE device_id=${literal(frozenBalloon.id)}`), 'missing');
+  for (const role of ['anon','authenticated']) denied(`SET ROLE ${role}; SELECT public.mark_balloon_missing('${owners[0]}',${literal(frozenBalloon.id)},NULL)`);
+  console.log('PASS: missing position is atomic, owner restricted and stable on repeated updates');
   console.log('Backend integration checks passed. All data was synthetic.');
 } finally {
   try { execFileSync('docker', ['rm', '-f', container], { stdio: 'pipe' }); } catch { /* Already removed. */ }

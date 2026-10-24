@@ -5,9 +5,8 @@ export const defaultFleetFilters: FleetFilters = { query: '', sort: 'alphabetica
 export function isPlannedBalloon(status: string) {
     return ['planned', 'storage', 'idle'].includes(status.toLowerCase());
 }
-export function isActiveBalloon(device: Pick<DeviceSummary, 'status' | 'lastContactT'>, now: number) {
-    if (['landed', 'recovered', 'retired', 'lost', 'missing', 'storage', 'idle', 'planned'].includes(device.status.toLowerCase())) return false;
-    return device.lastContactT != null && device.lastContactT <= now && now - device.lastContactT < 15 * 60_000;
+export function isActiveBalloon(device: Pick<DeviceSummary, 'status' | 'lastContactT'>, _now: number) {
+    return device.status.toLowerCase() === 'flying';
 }
 export function filterFleet<T extends DeviceSummary>(devices: T[], filters: FleetFilters, owner: string | null, now: number): T[] {
     const normalize = (value: string) => value.trim().toLowerCase().replace(/[-_]+/g, ' ');
@@ -28,7 +27,7 @@ export function filterFleet<T extends DeviceSummary>(devices: T[], filters: Flee
     });
 }
 export function registeredStatus(status: string): string | null {
-    return ({landed:'Landed', recovered:'Landed', missing:'Missing', lost:'Missing', retired:'Retired', storage:'Planned', idle:'Planned', planned:'Planned'} as Record<string,string>)[status.toLowerCase()] ?? null;
+    return ({flying:'Flying', landed:'Landed', recovered:'Landed', missing:'Missing', lost:'Missing', retired:'Retired', storage:'Planned', idle:'Planned', planned:'Planned'} as Record<string,string>)[status.toLowerCase()] ?? null;
 }
 
 type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;

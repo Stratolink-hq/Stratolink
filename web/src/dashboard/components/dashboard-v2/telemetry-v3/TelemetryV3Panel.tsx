@@ -1,10 +1,11 @@
+import { balloonColor } from '../FleetOverview';
+import BalloonActions from '../BalloonActions';
 import { useEffect, useMemo, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowUp,
     faBolt,
     faCircle,
-    faClockRotateLeft,
     faMoon,
     faSolarPanel,
     faSun,
@@ -15,31 +16,14 @@ import {
     buildFlightSeries,
     computePayloadAttitude,
 } from '@/lib/telemetry/flightSeries';
-import { relTime, stamp, tlmFmt, tzName, type StatusLevel } from '@/lib/telemetry/telemetryV3Format';
+import { relTime, stamp, tlmFmt, type StatusLevel } from '@/lib/telemetry/telemetryV3Format';
 import { useGatewayPoints } from '@/lib/gateways/data';
 import { haversineKm } from '@/lib/gateways/range';
 import { LineTrend } from './charts';
 import { Divider, DOT, Group } from './primitives';
 import { OfficialBadge, BalloonOwner } from '../BalloonIdentity';
 import { balloonName } from '@/lib/telemetry/fleetPlayback';
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** "May 17, 2026 · 08:55 PDT" (viewer's local zone) — no seconds, friendlier than the raw stamp. */
-function fmtLaunchDate(ms: number): string {
-    const d = new Date(ms);
-    return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
-function fmtLaunchTime(ms: number): string {
-    const d = new Date(ms);
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(d.getHours())}:${p(d.getMinutes())} ${tzName(ms)}`;
-}
-
-function fmtLaunch(ms: number): string {
-    return `${fmtLaunchDate(ms)} - ${fmtLaunchTime(ms)}`;
-}
+import { useUnits } from '../dashboard-units';
 
 type FlightSummary = { durationMs: number | null; distanceKm: number };
 
@@ -82,30 +66,12 @@ function LastContactValue({ lastContactT }: { lastContactT: number | null }) {
 }
 
 /** Header status — a quiet dot + label, not a button/chip. */
-function HeaderStatus({ status, label, icon = faCircle }: { status: StatusLevel; label: string; icon?: typeof faCircle }) {
+function HeaderStatus({ color, label }: { color: string; label: string }) {
     return (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <FontAwesomeIcon icon={icon} style={{ width: icon === faCircle ? 6 : 10, height: icon === faCircle ? 6 : 10, color: DOT[status], flexShrink: 0 }} aria-hidden />
+            <FontAwesomeIcon icon={faCircle} style={{ width: 5, height: 5, color, flexShrink: 0 }} aria-hidden />
             <span className="eyebrow" style={{ color: 'var(--t-text-2)', fontSize: 9.5 }}>{label}</span>
         </span>
-    );
-}
-
-/** Show the archived sample time or connection status at the chart cursor. */
-function ConnectionStatus({ connected, archived, recordedAt }: { connected: boolean; archived: boolean; recordedAt: number | null }) {
-    return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <HeaderStatus
-                status={connected ? 'nominal' : 'critical'}
-                label={connected ? archived ? 'Recorded telemetry' : 'Transmitting' : 'No connection'}
-                icon={connected && archived ? faClockRotateLeft : faCircle}
-            />
-            {connected && archived && recordedAt != null && (
-                <time dateTime={new Date(recordedAt).toISOString()} className="mono" style={{ color: 'var(--t-text-3)', fontSize: 9.5 }}>
-                    {fmtLaunch(recordedAt)}
-                </time>
-            )}
-        </div>
     );
 }
 
@@ -113,7 +79,7 @@ function ConnectionStatus({ connected, archived, recordedAt }: { connected: bool
  * width between them, so a wide value (e.g. "53,474 lux") claims room from
  * narrow neighbours instead of spilling into the next column. */
 const METRIC_ROW: React.CSSProperties = {
-    display: 'grid', gridTemplateColumns: 'repeat(4, auto)', justifyContent: 'space-between', columnGap: 8, padding: '14px 0',
+    display: 'grid', gridTemplateColumns: 'repeat(4, auto)', justifyContent: 'space-between', columnGap: 8, padding: '10px 0',
 };
 
 /** "1,626" below 10k lux, "53.5k" / "112k" above — full sun needs no finer
@@ -188,13 +154,14 @@ function TiltIcon({ deg, color }: { deg: number; color: string }) {
     );
 }
 
-export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, scrubT = null, summary, rows, isFuture = false, recordedHistory = false, variant = 'full', onPickTime, onScrubbingChange }: TelemetryV3PanelProps) {
+export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, scrubT = null, summary, rows, isFuture = false, variant = 'full', onPickTime, onScrubbingChange }: TelemetryV3PanelProps) {
     const showHeader = variant !== 'charts';
     const showBody = variant !== 'summary';
     /* The mobile summary header is tightened vertically — it's the only thing
      * visible above the map, so it earns its space. */
     const compact = variant === 'summary';
     const flight = useMemo(() => buildFlightSeries(rows), [rows]);
+    const u = useUnits();
 
     /* Point-in-time readings: blanked when scrubbed past the last transmission
      * (there's no telemetry out in the forecast). */
@@ -236,9 +203,9 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
     const toggleChart = (key: ChartKey) => setChartKey(current => (current === key ? 'temp' : key));
     const tiltSeries = useMemo(() => rows.map(r => computePayloadAttitude(r.ax, r.ay, r.az)?.tiltDeg ?? null), [rows]);
     const chart = ({
-        temp: { series: flight.temp, value: row?.temp ?? null, fmtFn: (v: number) => tlmFmt.d1(v), unit: '°C' },
+        temp: { series: flight.temp, value: row?.temp ?? null, fmtFn: (v: number) => tlmFmt.d1(u.temperature(v)), unit: u.labels.temperature },
         pres: { series: flight.press, value: row?.pres ?? null, fmtFn: (v: number) => tlmFmt.d1(v), unit: 'hPa' },
-        spd: { series: flight.speed, value: speedKmh, fmtFn: (v: number) => tlmFmt.int(v), unit: 'km/h' },
+        spd: { series: flight.speed, value: speedKmh, fmtFn: (v: number) => tlmFmt.int(u.speed(v)), unit: u.labels.speed },
         hdg: { series: flight.heading, value: row?.hdg ?? null, fmtFn: (v: number) => `${Math.round(v)}°`, unit: '' },
         batt: { series: flight.batt, value: batt ?? null, fmtFn: (v: number) => tlmFmt.d2(v), unit: 'V' },
         solar: { series: flight.solar, value: solar ?? null, fmtFn: (v: number) => tlmFmt.d2(v), unit: 'V' },
@@ -260,36 +227,15 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
      * panel stranded users on a data-less device with no way to switch. Only
      * the chart body gives way to the note. */
     const awaiting = rows.length < 2;
-    const archived = recordedHistory || ['landed', 'recovered', 'retired', 'lost'].includes(device?.status?.toLowerCase() ?? '');
-    const registryStillFlying = recordedHistory && device?.status?.toLowerCase() === 'flying';
-    const launchLine = registryStillFlying && rows.length
-        ? { text: `Records from ${fmtLaunchDate(rows[0].t)}`, time: rows[0].t }
-        : device?.launchedAt
-            ? { text: `Launched ${rows[0]?.locationApproximate ? 'from San Francisco - ' : ''}${fmtLaunchDate(device.launchedAt)}`, time: device.launchedAt }
-            : { text: 'Awaiting launch', time: null };
 
     return (
         <>
             {showHeader && (
             <div style={{ borderBottom: compact ? undefined : '1px solid var(--t-border)', flexShrink: 0 }}>
-                <h1 className="dashboard-device-title">{device ? balloonName(device) : 'Balloon'} <OfficialBadge official={device?.official} /></h1>
-                {device?.ownerGithub && <div className="detail-owner"><BalloonOwner device={device} /></div>}
-                <div style={{ padding: compact ? '8px var(--telemetry-gutter, 18px) 0' : '12px var(--telemetry-gutter, 18px) 0' }}>
-                    {/* One line: when it doesn't fit, the time wraps onto a clipped second line, then the date ellipsizes. */}
-                    <div className="detail-status-line">
-                        <span className="detail-status-main">
-                            {device?.status && (
-                                <>
-                                    <HeaderStatus status="nominal" label={registryStillFlying ? 'Missing' : String(device.status)} />
-                                    <span style={{ color: 'var(--t-text-4)', fontSize: 10 }}>-</span>
-                                </>
-                            )}
-                            <span className="mono detail-status-text">
-                                {launchLine.text}
-                            </span>
-                        </span>
-                        {launchLine.time != null && <span className="mono detail-status-time">{` - ${fmtLaunchTime(launchLine.time)}`}</span>}
-                    </div>
+                <div className="dashboard-device-heading"><h1 className="dashboard-device-title">{device ? balloonName(device) : 'Balloon'} <OfficialBadge official={device?.official} /></h1>{device && <BalloonActions deviceId={device.id} />}</div>
+                <div className="balloon-byline detail-byline">
+                    {device && <BalloonOwner device={device} />}
+                    {device?.status && <HeaderStatus color={balloonColor(device.id)} label={String(device.status)} />}
                 </div>
                 <div
                     style={{
@@ -300,12 +246,10 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                     }}
                 >
                     <Metric label="Flight time" value={summary.durationMs != null ? fmt.duration(summary.durationMs) : '-'} />
-                    <Metric label="Total dist" value={Math.round(summary.distanceKm).toLocaleString('en-US')} unit="km" />
+                    <Metric label="Total dist" value={tlmFmt.int(u.distance(summary.distanceKm))} unit={u.labels.distance} />
                     <Metric label="Last contact" value={<LastContactValue lastContactT={device?.lastContactT ?? null} />} />
                 </div>
-                <div style={{ padding: compact ? '0 var(--telemetry-gutter, 18px) 12px' : '0 var(--telemetry-gutter, 18px) 16px' }}>
-                    <ConnectionStatus connected={!isFuture && !awaiting} archived={archived} recordedAt={scrubRow?.t ?? null} />
-                </div>
+
             </div>
             )}
 
@@ -322,14 +266,14 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                 title="Flight path"
                 gkey="flight"
             >
-                <div style={{ padding: '13px 0' }}>
+                <div style={{ padding: '9px 0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <span className="eyebrow" style={{ color: 'var(--t-text-2)' }}>
                             Altitude <span style={{ color: 'var(--t-text-4)', fontSize: 9 }}>pres</span>
                         </span>
                         <span className="disp mono" style={{ fontSize: 22, fontWeight: 600 }}>
-                            {altVal != null ? tlmFmt.int(altVal) : '-'}
-                            {altVal != null && <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-3)', marginLeft: 3 }}>m</span>}
+                            {tlmFmt.int(u.altitude(altVal) ?? null)}
+                            {altVal != null && <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-3)', marginLeft: 3 }}>{u.labels.altitude}</span>}
                         </span>
                     </div>
                     <LineTrend
@@ -337,8 +281,8 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                         times={flight.times}
                         band={[8500, 12000]}
                         status={altStatus}
-                        fmtFn={(v) => tlmFmt.int(v)}
-                        unit="m"
+                        fmtFn={(v) => tlmFmt.int(u.altitude(v))}
+                        unit={u.labels.altitude}
                         height={58}
                         scrubT={scrubT ?? scrubRow?.t ?? null}
                         onPickTime={onPickTime}
@@ -346,7 +290,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                     />
                 </div>
                 <Divider />
-                <div style={{ padding: '13px 0' }}>
+                <div style={{ padding: '9px 0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <span className="eyebrow" style={{ color: 'var(--t-text-2)' }}>
                             {CHART_TITLES[chartKey]}
@@ -360,9 +304,9 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                 </div>
                 <Divider />
                 <div style={METRIC_ROW}>
-                    <Metric label="Temperature" {...select('temp')} value={row?.temp != null ? tlmFmt.d1(row.temp) : '-'} unit={row?.temp != null ? '°C' : undefined} />
+                    <Metric label="Temperature" {...select('temp')} value={tlmFmt.d1(u.temperature(row?.temp ?? null))} unit={row?.temp != null ? u.labels.temperature : undefined} />
                     <Metric label="Pressure" {...select('pres')} value={row?.pres != null ? tlmFmt.d1(row.pres) : '-'} unit={row?.pres != null ? 'hPa' : undefined} />
-                    <Metric label="Speed" {...select('spd')} value={speedKmh != null ? tlmFmt.int(speedKmh) : '-'} unit={speedKmh != null ? 'km/h' : undefined} />
+                    <Metric label="Speed" {...select('spd')} value={tlmFmt.int(u.speed(speedKmh))} unit={speedKmh != null ? u.labels.speed : undefined} />
                     <Metric label="Heading" {...select('hdg')} value={row?.hdg != null ? `${Math.round(row.hdg)}°` : '-'} />
                 </div>
             </Group>
@@ -418,7 +362,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
 
 
             {flight.times.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px var(--telemetry-gutter, 18px) 20px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px var(--telemetry-gutter, 18px) 8px', flexShrink: 0 }}>
                     <span className="mono" style={{ fontSize: 9.5, color: 'var(--t-text-4)' }}>
                         {stamp(flight.times[0])}
                     </span>

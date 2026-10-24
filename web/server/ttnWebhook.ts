@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { parseB2BEventPayload, parseCTTEventPayload, parseTTNPayload, type TTNWebhookPayload } from '../lib/ttn/payload-parser.ts';
 import { isExpectedTTNDeliveryDuplicate, parseTTNUplinkIdentity, readRequestBodyWithinLimit } from '../lib/ttn/webhook-auth.ts';
 import { createServerSupabase } from './supabaseServer.js';
+import { recomputeTrigger } from './forecastRecomputeTrigger.ts';
 
 const MAX_BODY_BYTES = 256 * 1024;
 const ID = /^[a-z0-9](?:[a-z0-9-]{0,34}[a-z0-9])?$/;
@@ -23,6 +24,8 @@ type Dependencies = {
   resolveIdentity: (lookup: Lookup) => Promise<Binding | null>;
   insert: (table: Table, row: Record<string, unknown>) => Promise<{ error: unknown }>;
   markReceived: (identityId: string, receivedAt: string) => Promise<{ error: unknown }>;
+  /** Fire-and-forget: a GPS fix was stored for this device (forecast recompute trigger). */
+  notifyNewFix: (deviceId: string) => void;
 };
 
 const defaults: Dependencies = {
@@ -36,6 +39,7 @@ const defaults: Dependencies = {
   async markReceived(identityId, receivedAt) {
     return await createServerSupabase().rpc('mark_radio_received', { p_radio_identity_id: identityId, p_received_at: receivedAt });
   },
+  notifyNewFix: recomputeTrigger.notify,
 };
 
 function response(status: number, errorOrData: string | Record<string, unknown>) {
@@ -186,6 +190,12 @@ export function createTTNWebhook(dependencies: Dependencies = defaults) {
       }
       const marked = await dependencies.markReceived(binding.radio_identity_id, identity.receivedAt);
       if (marked.error) return response(503, 'Ingestion unavailable');
+      // A NEW telemetry row with a GPS position can move the forecast's origin:
+      // ask the recompute tier to re-anchor it. Off the response path and never
+      // able to fail it (the trigger swallows its own errors; this guards the rest).
+      if (table === 'telemetry' && !duplicate && row.lat != null && row.lon != null) {
+        try { dependencies.notifyNewFix(binding.canonical_device_id); } catch { /* best-effort */ }
+      }
       return response(200, { success: true, device_id: binding.canonical_device_id, ...(duplicate ? { duplicate: true } : {}) });
     } catch { return response(503, 'Ingestion unavailable'); }
   };

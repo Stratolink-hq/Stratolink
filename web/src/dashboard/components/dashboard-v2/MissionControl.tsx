@@ -1,3 +1,5 @@
+import ManagedBalloons from './ManagedBalloons';
+import { useMobileDrawer } from './useMobileDrawer';
 /**
  * Mission Control — the single unified flight page.
  *
@@ -18,7 +20,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
+import { faChevronLeft } from '@fortawesome/free-solid-svg-icons';
 import type { TelemetryRow } from './atoms';
 import { useTelemetry, useFleetHistory, type DeviceSummary } from './useTelemetry';
 import { useForecastPath, type UseForecastPathResult } from './useForecastPath';
@@ -32,7 +34,7 @@ import DashboardHeader from './DashboardHeader';
 import { useDashboardControls } from './dashboard-controls';
 import FleetOverview, { balloonColor, balloonTransitionName } from './FleetOverview';
 import { positionAtTime, rowAtTime, fleetActivity, previewFleet } from '@/lib/telemetry/fleetPlayback';
-import { historyRange } from '@/lib/telemetry/timelineHistory';
+import { flightSpans, historyRange } from '@/lib/telemetry/timelineHistory';
 import MapLegend from './MapLegend';
 import { useGlobePortal, notifyGlobeParent } from './globe-portal';
 import CommunityPanel from './CommunityPanel';
@@ -45,6 +47,8 @@ import { flightTrack } from '@/lib/telemetry/flightTrack';
 import { extendWithNewerFixes, liveForecastPath, timedForecastLeg } from '@/lib/telemetry/liveTrack';
 import { withLatestTelemetry } from '@/lib/telemetry/fleetSummary';
 import { useFleetReconstruction } from './useFleetReconstruction';
+import { useFleetForecasts } from './FleetProjections';
+import { estimatedLeg, lastFixTime, liveEstimateT, projectedPosition, type ForecastLegs } from '@/lib/telemetry/forecastTrack';
 import { reconstructedFlightTrack } from '@/lib/telemetry/reconstructedTrack';
 import { receivingStations } from '@/lib/telemetry/fleetPlayback';
 
@@ -66,6 +70,13 @@ function mappedPosition(rows: TelemetryRow[], time: number | null) {
         positionTracks.set(rows, track);
     }
     return positionAtTime(track, time);
+}
+
+/** A fleet balloon past its last point at `time`, carried along its forecast;
+ *  null when it isn't past it or has no usable forecast. */
+function projectedFleetPosition(track: V2FlightPoint[], forecast: ForecastLegs | undefined, time: number | null) {
+    const last = track[track.length - 1];
+    return forecast && last && time !== null && time > last.t ? projectedPosition(last, forecast, time) : null;
 }
 
 export default function MissionControlScreen() {
@@ -98,6 +109,7 @@ export default function MissionControlScreen() {
         devices: registryDevices, selectedId, setSelectedId, rows, loading: registryLoading, refetch,
     } = useTelemetry({ initialSelectedId });
     const community = useCommunity();
+    const managing = community.panel === 'manage' && Boolean(community.account);
     useEffect(() => { if (community.focusDevice) setSelectedId(community.focusDevice); }, [community.focusDevice, setSelectedId]);
     const portalPreview = globeStage === 'footer' || globeStage === 'entering';
     const fleetHistory = useFleetHistory(registryDevices.filter(device => device.connectionStatus !== 'pending'), selectedId === null, { positionsOnly: portalPreview });
@@ -113,7 +125,7 @@ export default function MissionControlScreen() {
         catch { /* Browser storage may be disabled. */ }
     }, [filters]);
     useEffect(() => { if (community.revision) refetch(); }, [community.revision, refetch]);
-    const filteredDevices = useMemo(() => filterFleet(devices, { ...filters, mine: filters.mine && Boolean(community.user) }, community.user?.id ?? null, Date.now()), [devices,filters,community.user?.id]);
+    const filteredDevices = useMemo(() => managing ? devices.filter(device => community.balloons.some(balloon => balloon.id === device.id)) : filterFleet(devices, { ...filters, mine: filters.mine && Boolean(community.user) }, community.user?.id ?? null, Date.now()), [devices,filters,community.user?.id,managing,community.balloons]);
     const filteredIds = new Set(filteredDevices.map(device => device.id));
     const fleetReconstruction = useFleetReconstruction(selectedId === null && !portalPreview && showFlightTrail
         ? filteredDevices.filter(device => !isPlannedBalloon(device.status) && (fleetHistory.rowsByDevice[device.id]?.length ?? 0) > 1).map(device => device.id)
@@ -132,8 +144,7 @@ export default function MissionControlScreen() {
     /* Null scrub = follow the latest packet so the page behaves "live". */
     const followLive = scrubT === null;
 
-    /* Mobile only: charts live in a pull-up drawer, hidden by default. */
-    const [chartsOpen, setChartsOpen] = useState(false);
+    const drawer = useMobileDrawer();
 
     /* The whole flight is always in view (no range zoom). */
     const visibleRows = rows;
@@ -161,6 +172,13 @@ export default function MissionControlScreen() {
     }
 
     const isMobile = useIsMobile();
+    useEffect(() => {
+        if (isMobile && community.panel) {
+            drawer.scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+            drawer.showDetails();
+        }
+    }, [isMobile, community.panel, drawer.showDetails]);
+
     const { theme } = useDashboardTheme();
     useEffect(() => { notifyGlobeParent('theme', { theme }); }, [theme]);
     useEffect(() => {
@@ -172,7 +190,7 @@ export default function MissionControlScreen() {
         setSelectedId(null);
         setScrubT(null);
         setFleetScrubT(null);
-        setChartsOpen(false);
+        drawer.showMap();
     }, [globeStage, setSelectedId]);
 
     /* scrubT may sit in the future (along the forecast); only clamp it back if
@@ -183,14 +201,23 @@ export default function MissionControlScreen() {
         if (scrubT! < t0) setScrubT(t0);
     }, [visibleRows, scrubT, followLive]);
 
+    /* Ticking wall-clock for "time to present" and the live position estimate.
+     * null on server + first client render (SSR-safe), then live; refreshed each minute. */
+    const [nowMs, setNowMs] = useState<number | null>(null);
+    useEffect(() => {
+        setNowMs(Date.now());
+        const id = setInterval(() => setNowMs(Date.now()), 60_000);
+        return () => clearInterval(id);
+    }, []);
+
     /* "Now" boundary = the latest packet (observed↔forecast divide). */
     const packetEndT = visibleRows.length ? visibleRows[visibleRows.length - 1].t : null;
-    /* When GPS is stale, "now" is the dead-reckoned forecast origin — well past the
-     * last packet — so live should show the balloon's ESTIMATED current position
-     * there, not the last fix. When GPS is fresh the last packet IS now, so we leave
-     * the live cursor exactly where it was (no behavior change for live balloons). */
-    const liveOriginT = !archived && forecast.staleGps ? forecast.originT : null;
-    const effectiveScrubT: number | null = followLive ? (liveOriginT ?? packetEndT) : scrubT;
+    /* When GPS is dark, live shows the balloon's ESTIMATED current position along
+     * the forecast (see liveEstimateT). When GPS is fresh the last packet IS now,
+     * so the live cursor stays there. */
+    const lastFixT = useMemo(() => lastFixTime(visibleRows), [visibleRows]);
+    const liveT = archived ? null : liveEstimateT(forecast, lastFixT, nowMs);
+    const effectiveScrubT: number | null = followLive ? (liveT ?? packetEndT) : scrubT;
     /* In the future leg the charts hold the last real reading. */
     const isFuture = effectiveScrubT !== null && packetEndT !== null && effectiveScrubT > packetEndT;
 
@@ -230,15 +257,6 @@ export default function MissionControlScreen() {
                 : base.latestFix,
         };
     }, [selectedId, devices, rows]);
-
-    /* Ticking wall-clock for "time to present". null on server + first client
-     * render (SSR-safe), then live; refreshed each minute. */
-    const [nowMs, setNowMs] = useState<number | null>(null);
-    useEffect(() => {
-        setNowMs(Date.now());
-        const id = setInterval(() => setNowMs(Date.now()), 60_000);
-        return () => clearInterval(id);
-    }, []);
 
     /* Launch moment derived from the telemetry itself (first decisive climb),
      * NOT devices.launched_at — a payload can soak on the bench for days
@@ -297,17 +315,68 @@ export default function MissionControlScreen() {
     }, [fleetHistory.rowsByDevice, shownKey]);
     const fleetLastT = useMemo(() => historyRange(fleetHistories)?.end ?? null, [fleetHistories]);
     const fleetRecorded = fleetLastT !== null && Date.now() - fleetLastT > 15 * 60_000;
+
+    /* Flying balloons are shown where their forecast puts them, not where they
+     * last reported: a GPS-dark one is carried along its forecast to "now"
+     * (liveEstimateT), and scrubbing past its last fix follows the same line. */
+    const fleetForecastIds = useMemo(() => devices.filter(device => {
+        if (device.status.toLowerCase() !== 'flying') return false;
+        const lastT = fleetHistory.rowsByDevice[device.id]?.at(-1)?.t;
+        return lastT != null && (device.launchedAt == null || lastT >= device.launchedAt);
+    }).map(device => device.id), [devices, fleetHistory.rowsByDevice]);
+    const fleetForecasts = useFleetForecasts(isFleet ? fleetForecastIds : []);
+    const fleetLive = useMemo<Record<string, number | null>>(() => Object.fromEntries(Object.entries(fleetForecasts).map(([id, legs]) =>
+        [id, liveEstimateT(legs, lastFixTime(fleetHistory.rowsByDevice[id] ?? []), nowMs)])), [fleetForecasts, fleetHistory.rowsByDevice, nowMs]);
+    const fleetLiveTimes = Object.values(fleetLive).filter((t): t is number => t !== null);
+    const fleetLiveT = fleetLiveTimes.length ? Math.max(...fleetLiveTimes) : null;
+    /* Live while any balloon is being carried along its forecast, even with no recent packet. */
+    const fleetArchived = fleetRecorded && fleetLiveT === null;
     const fleetBalloons = useMemo<V2Balloon[]>(() => devices.flatMap(device => {
+        const frozen = fleetScrubT === null && device.status === 'missing' ? device.frozenPosition : null;
+        if (frozen) return [{ id: device.id, lat: frozen.lat, lon: frozen.lon, altitude_m: null }];
+        const projected = projectedFleetPosition(fleetTracks[device.id] ?? [], fleetForecasts[device.id], fleetScrubT ?? fleetLive[device.id] ?? null);
+        if (projected) return [{ id: device.id, ...projected, altitude_m: null }];
         const rows = fleetHistory.rowsByDevice[device.id] ?? [];
         const position = mappedPosition(rows, fleetScrubT);
         const point = fleetScrubT !== null ? lerpAlongTrack(fleetTracks[device.id] ?? [], fleetScrubT) : null;
         if (position && point) { position.lon = ((point[0] + 180) % 360 + 360) % 360 - 180; position.lat = point[1]; }
         return position ? [{ id: device.id, ...position }] : [];
-    }), [devices, fleetHistory.rowsByDevice, fleetTracks, fleetScrubT]);
+    }), [devices, fleetHistory.rowsByDevice, fleetTracks, fleetScrubT, fleetLive, fleetForecasts]);
     const fleetFitBalloons = useMemo<V2Balloon[]>(() => devices.flatMap(device => {
+        if (device.status === 'missing' && device.frozenPosition) return [{ id: device.id, ...device.frozenPosition, altitude_m: null }];
+        const projected = projectedFleetPosition(fleetTracks[device.id] ?? [], fleetForecasts[device.id], fleetLive[device.id] ?? null);
+        if (projected) return [{ id: device.id, ...projected, altitude_m: null }];
         const position = mappedPosition(fleetHistory.rowsByDevice[device.id] ?? [], null);
         return position ? [{ id: device.id, ...position }] : [];
-    }), [devices, fleetHistory.rowsByDevice]);
+    }), [devices, fleetHistory.rowsByDevice, fleetTracks, fleetLive, fleetForecasts]);
+    /* The line from each such balloon's last fix to its marker. Only that far:
+     * the forecast beyond "now" stays on the balloon's own page. */
+    const fleetEstimates = useMemo(() => Object.entries(fleetForecasts).flatMap(([id, legs]) => {
+        const last = fleetTracks[id]?.at(-1);
+        const untilT = fleetScrubT ?? fleetLive[id] ?? null;
+        const leg = last && untilT !== null ? estimatedLeg(last, legs, untilT) : null;
+        return leg ? [{ id, ...leg }] : [];
+    }), [fleetForecasts, fleetTracks, fleetScrubT, fleetLive]);
+
+    /* The fleet scrubber covers only flying time: each balloon on show from its
+     * detected launch (bench soak doesn't count) to its last packet or estimated
+     * "now", with the months between flights left out. */
+    const fleetLaunches = useMemo(() => new Map(devices.map(device => {
+        const rows = fleetHistory.rowsByDevice[device.id] ?? [];
+        return [device.id, rows.length ? detectLaunchT(rows, device.launchedAt) : null];
+    })), [devices, fleetHistory.rowsByDevice]);
+    const fleetFlown = useMemo(() => {
+        const shown = new Set(shownKey.split('\n'));
+        return devices.filter(device => shown.has(device.id) && fleetLaunches.get(device.id) != null);
+    }, [devices, shownKey, fleetLaunches]);
+    const fleetSpans = useMemo(() => flightSpans(fleetFlown.map(device => ({
+        launchT: fleetLaunches.get(device.id) ?? null,
+        rows: fleetHistory.rowsByDevice[device.id] ?? [],
+        liveUntil: fleetLive[device.id],
+    }))), [fleetFlown, fleetLaunches, fleetHistory.rowsByDevice, fleetLive]);
+    const fleetTimelineHistories = useMemo(() => fleetFlown.length
+        ? fleetFlown.map(device => fleetHistory.rowsByDevice[device.id] ?? [])
+        : fleetHistories, [fleetFlown, fleetHistory.rowsByDevice, fleetHistories]);
     const shownFleet = portalPreview ? fleetBalloons.filter(balloon => previewIds.has(balloon.id)) : fleetBalloons.filter(balloon => filteredIds.has(balloon.id));
     const plannedCount = filteredDevices.filter(device => isPlannedBalloon(device.status)).length;
     const activity = fleetActivity(filteredDevices.filter(device => !isPlannedBalloon(device.status)), fleetHistory.rowsByDevice, Date.now());
@@ -329,20 +398,22 @@ export default function MissionControlScreen() {
     }, []);
 
     const handleSelectDevice = useCallback((id: string, animate = true) => {
+        community.setPanel(null);
         transitionPanel(id, () => {
             setSelectedId(id);
             setScrubT(null);
-            setChartsOpen(false);
+            drawer.showMap();
             window.history.replaceState(window.history.state, '', `/dashboard?device=${encodeURIComponent(id)}`);
             notifyGlobeParent('route', { path: `/dashboard?device=${encodeURIComponent(id)}` });
         }, animate);
-    }, [setSelectedId, transitionPanel]);
+    }, [setSelectedId, transitionPanel, community.setPanel, drawer.showMap]);
 
     function showFleet(animate = true) {
+        community.setPanel(null);
         transitionPanel(selectedId, () => {
             setSelectedId(null);
             setScrubT(null);
-            setChartsOpen(false);
+            drawer.showMap();
             window.history.replaceState(window.history.state, '', '/dashboard');
             notifyGlobeParent('route', { path: '/dashboard' });
         }, animate);
@@ -355,24 +426,29 @@ export default function MissionControlScreen() {
     };
 
     return (
-        <div className="sl-app fleet-app" data-theme={theme}>
+        <div className="sl-app fleet-app" data-theme={theme} style={isMobile && !footerOnly ? { height: drawer.viewportHeight } : undefined}>
             {!footerOnly && <>
                 <div className="safari-edge safari-edge-top" aria-hidden="true" />
                 <div className="safari-edge safari-edge-bottom" aria-hidden="true" />
             </>}
-            <main className="fleet-layout" data-detail={!isFleet} data-loading={registryLoading}>
+            <main className="fleet-layout" data-mobile-drawer={isMobile && !footerOnly} data-drawer-expanded={drawer.expanded} data-drawer-dismissed={drawer.dismissed} data-detail={!isFleet} data-managing={managing} data-loading={registryLoading}>
+                {isMobile && !footerOnly && <div className="mobile-dashboard-header"><DashboardHeader /></div>}
                 {!footerOnly && <aside className="tlm-panel dashboard-panel fleet-panel">
-                    <DashboardHeader onBack={isFleet ? undefined : showFleet} />
+                    {!isMobile && <DashboardHeader onBack={isFleet && !managing ? undefined : showFleet} />}
+                    {isMobile && <button type="button" className="mobile-drawer-handle" aria-label={drawer.dismissed ? 'Show balloons' : drawer.expanded ? 'Show more map' : 'Expand balloon details'} aria-expanded={drawer.expanded} aria-controls="dashboard-drawer-content" onClick={drawer.toggle} {...drawer.handleEvents}><span /></button>}
+                    <div id="dashboard-drawer-content" className="dashboard-drawer-content" inert={isMobile && drawer.dismissed} ref={drawer.scrollRef} {...(isMobile ? drawer.scrollEvents : {})}>
+                    {isMobile && (!isFleet || managing) && <button type="button" className="dashboard-back mobile-drawer-back" onClick={() => showFleet()}><FontAwesomeIcon icon={faChevronLeft} />All balloons</button>}
                     <CommunityPanel />
-                    {isFleet ? (
+                    {managing ? <ManagedBalloons onView={handleSelectDevice} /> : isFleet ? (
                         <><FleetFilters value={filters} onChange={setFilters} signedIn={Boolean(community.account)} count={filteredDevices.length} />
                         <FleetOverview devices={filteredDevices} {...fleetHistory} loading={registryLoading || fleetHistory.loading} scrubT={fleetScrubT} now={nowMs ?? Date.now()} onSelect={handleSelectDevice} transitionId={transitionId} /></>
                     ) : (
                         <div className="dashboard-detail-content tlm-scroll" style={{ viewTransitionName: balloonTransitionName(selectedId) }}>
-                            <TelemetryV3Panel {...panelProps} variant={isMobile ? 'summary' : 'full'} />
+                            <TelemetryV3Panel {...panelProps} variant="full" />
                         </div>
                     )}
-                    <footer className="dashboard-footer">
+                    </div>
+                    <footer className="dashboard-footer" inert={isMobile && drawer.dismissed}>
                         <nav aria-label="Stratolink"><a href="/docs" target="_top">docs</a><a href="/blog" target="_top">blog</a><a href="mailto:contact@stratolink.org">contact</a></nav>
                         <span>© stratolink 2026</span>
                     </footer>
@@ -386,6 +462,7 @@ export default function MissionControlScreen() {
                         fleetDevices={portalPreview ? devices : filteredDevices}
                         fleetHistory={fleetHistory.rowsByDevice}
                         fleetTracks={fleetTracks}
+                        fleetEstimates={fleetEstimates}
                         fleetReady={!registryLoading && !fleetHistory.loading}
                         fleetCaption={fleetCaption}
                         onSelectBalloon={handleSelectDevice}
@@ -403,78 +480,20 @@ export default function MissionControlScreen() {
                     />}
                     {!footerOnly && <div className="fleet-timeline">
                         <Timeline
-                            histories={isFleet ? fleetHistories : [visibleRows]}
+                            histories={isFleet ? fleetTimelineHistories : [visibleRows]}
+                            spans={isFleet && fleetSpans.length ? fleetSpans : null}
+                            estimated={isFleet}
                             scrubT={isFleet ? fleetScrubT : scrubT}
                             onScrub={isFleet ? setFleetScrubT : pickTime}
-                            archived={isFleet ? fleetRecorded : archived}
+                            archived={isFleet ? fleetArchived : archived}
                             onScrubbingChange={setIsScrubbing}
                             futureEndT={isFleet ? null : forecast.endT}
-                            originT={isFleet ? null : liveOriginT}
+                            originT={isFleet ? fleetLiveT : liveT}
                             floating
                         />
                     </div>}
                 </div>
-                {isMobile && !isFleet && <>
-                    <div style={{ height: DRAWER_HANDLE_H, flexShrink: 0 }} />
-                    <ChartsDrawer open={chartsOpen} onToggle={() => setChartsOpen(value => !value)}>
-                        <div className="tlm-panel tlm-scroll" style={{ minHeight: 0, overflowY: 'auto' }}>
-                            <TelemetryV3Panel {...panelProps} variant="charts" />
-                        </div>
-                    </ChartsDrawer>
-                </>}
             </main>
-        </div>
-    );
-}
-
-/* ──────────────────────────────────────────────────────────────
- * Charts drawer (mobile) — slides up from the bottom over the map.
- * Collapsed, only the grab handle peeks above the bottom edge.
- * ────────────────────────────────────────────────────────────── */
-const DRAWER_HANDLE_H = 46;
-
-function ChartsDrawer({ open, onToggle, children }: {
-    open: boolean;
-    onToggle: () => void;
-    children: React.ReactNode;
-}) {
-    return (
-        <div
-            className="charts-drawer"
-            style={{
-                position: 'absolute', left: 0, right: 0, bottom: 0,
-                maxHeight: 'min(78dvh, 100%)', zIndex: 30,
-                display: 'flex', flexDirection: 'column',
-                background: 'var(--sl-bg-1)',
-                borderTop: '1px solid var(--sl-border)',
-                borderRadius: '22px 22px 0 0', overflow: 'hidden',
-                boxShadow: '0 -2px 12px rgba(26, 28, 27, 0.08)',
-                transform: open ? 'translateY(0)' : `translateY(calc(100% - ${DRAWER_HANDLE_H}px))`,
-                transition: 'transform 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-        >
-            <button
-                type="button"
-                onClick={onToggle}
-                aria-expanded={open}
-                style={{
-                    flexShrink: 0, height: DRAWER_HANDLE_H,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-                    background: 'transparent', border: 'none', cursor: 'pointer', width: '100%',
-                    padding: 0,
-                }}
-            >
-                <span style={{
-                    fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase',
-                    color: 'var(--sl-text-dim2)', fontFamily: 'var(--sl-sans)',
-                }}>
-                    {open ? 'Hide charts' : 'View charts'}
-                    <FontAwesomeIcon icon={open ? faChevronDown : faChevronUp} style={{ marginLeft: 8 }} />
-                </span>
-            </button>
-            <div inert={!open} aria-hidden={!open} style={{ minHeight: 0, overflowY: 'auto', paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
-                {children}
-            </div>
         </div>
     );
 }
@@ -483,7 +502,7 @@ function ChartsDrawer({ open, onToggle, children }: {
  * Map column — coverage + 3-state flight path + forecast.
  * ────────────────────────────────────────────────────────────── */
 function MapColumn({
-    isFleet, fleetBalloons, fleetFitBalloons, fleetDevices, fleetHistory, fleetTracks, fleetReady, fleetCaption, onSelectBalloon,
+    isFleet, fleetBalloons, fleetFitBalloons, fleetDevices, fleetHistory, fleetTracks, fleetEstimates, fleetReady, fleetCaption, onSelectBalloon,
     visibleRows,
     scrubRow,
     selectedDevice,
@@ -502,6 +521,8 @@ function MapColumn({
     fleetDevices: DeviceSummary[];
     fleetHistory: Record<string, TelemetryRow[]>;
     fleetTracks: Record<string, V2FlightPoint[]>;
+    /** Each GPS-dark balloon's estimated path from its last fix to its marker. */
+    fleetEstimates: Array<{ id: string; drift: Array<[number, number]>; ahead: Array<[number, number]> }>;
     fleetReady: boolean;
     fleetCaption: string;
     onSelectBalloon: (id: string) => void;
@@ -706,19 +727,15 @@ function MapColumn({
                 showFlightPaths={!portalPreview && !isFleet && showFlightTrail}
                 showFlightTails={!portalPreview && isFleet && showFlightTrail}
                 showProjectedPath={!portalPreview && showProjectedPath}
-                fleetForecastIds={isFleet ? fleetDevices.filter(device => {
-                    if (!forecastEligible(device.status)) return false;   /* landed / recovered / retired / lost / missing: no projection */
-                    const lastT = fleetHistory[device.id]?.at(-1)?.t;
-                    return lastT != null && (device.launchedAt == null || lastT >= device.launchedAt);
-                }).map(device => device.id) : []}
+                fleetEstimates={isFleet ? fleetEstimates.filter(leg => fleetDevices.some(device => device.id === leg.id)) : []}
                 balloons={isFleet ? fleetBalloons : balloon ? [balloon] : []}
                 fleetFitBalloons={portalPreview ? fleetFitBalloons.filter(point => fleetBalloons.some(balloon => balloon.id === point.id)) : isFleet ? fleetFitBalloons : undefined}
                 fleetPaths={fleetPaths}
                 onSelectBalloon={isFleet ? onSelectBalloon : undefined}
-                preserveCamera
+                preserveCamera={!isMobile}
                 activeId={selectedDevice?.id ?? null}
                 flightPath={trackPoints}
-                autoFit={globeStage === 'standalone' && (isFleet ? fleetReady : visibleRows.length > 0)}
+                autoFit={(globeStage === 'standalone' || (isMobile && globeStage === 'dashboard')) && (isFleet ? fleetReady : visibleRows.length > 0)}
                 portalReady={fleetReady}
                 playbackT={isFleet ? scrubT : scrubRow?.t ?? null}
                 terminatorDate={terminatorDate}
@@ -734,8 +751,9 @@ function MapColumn({
                 forecastEllipses={forecast.ellipses}
                 divergence={forecast.divergence}
                 colorScheme={colorScheme}
-                liftPx={globeStage === 'standalone' && isMobile ? 60 : 0}
-                wideZoom={isMobile ? 0.8 : 1.5}
+                liftPx={0}
+                /* Land on the balloon's recent position with some focus (a few hundred km across), not the whole globe. */
+                wideZoom={isMobile ? (isFleet ? 0.55 : 5) : 7}
                 pickPath={pickPath}
                 onPickTime={onPickTime}
             /></Suspense>
@@ -745,6 +763,7 @@ function MapColumn({
                 hasForecast={liveForecast.path.length >= 2 || liveForecast.ensemble.length > 0 || forecast.ellipses.length > 0 || (staleLine?.length ?? 0) >= 2 || forecast.divergence != null}
                 hasHindcast={hindcastPath.length >= 2 || trackPoints.length >= 2}
                 hasEstimated={hindcastSegments.some(s => s.estimated)}
+                hasEstimate={isFleet && fleetEstimates.length > 0}
                 hasGateways={flightHasGateways}
                 colorScheme={colorScheme}
             />

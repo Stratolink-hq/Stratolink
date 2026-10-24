@@ -31,14 +31,15 @@ const request = (payload = fixture(), headers = {}) => new Request('https://stra
   method: 'POST', headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json', ...headers }, body: JSON.stringify(payload),
 });
 function harness(overrides = {}) {
-  const lookups = [], inserts = [], received = [];
+  const lookups = [], inserts = [], received = [], notified = [];
   const handler = createTTNWebhook({
     async resolveIdentity(input) { lookups.push(input); return binding; },
     async insert(table, row) { inserts.push({ table, row }); return { error: null }; },
     async markReceived(id, time) { received.push({ id, time }); return { error: null }; },
+    notifyNewFix(deviceId) { notified.push(deviceId); },
     ...overrides,
   });
-  return { handler, lookups, inserts, received };
+  return { handler, lookups, inserts, received, notified };
 }
 
 test('production entry uses the native Request handler without a Node body parser', async () => {
@@ -202,4 +203,43 @@ test('receiver normalization never converts missing coordinates into a plausible
   assert.deepEqual(extractGateways([{ gateway_ids: { gateway_id: 'receiver' }, location: { latitude: 30 }, rssi: 'bad' }]), [
     { gateway_id: 'receiver', rssi: null, snr: null, lat: null, lon: null, alt: null },
   ]);
+});
+
+test('a newly stored GPS fix notifies the forecast recompute trigger; echoes, fixless packets and events do not', async () => {
+  /* The shared fixture is a NOGPS sentinel frame; give it a firmware-approved fix. */
+  const withFix = fixture();
+  const gps = Buffer.from(frame);
+  gps.writeInt32BE(37.7749e7, 0); gps.writeInt32BE(-122.4194e7, 4); gps.writeInt32BE(15000, 8); gps[24] = 8;
+  withFix.uplink_message.frm_payload = gps.toString('base64');
+  const h = harness();
+  assert.equal((await h.handler(request(withFix))).status, 200);
+  assert.equal(h.inserts[0].row.lat, 37.7749);
+  assert.deepEqual(h.notified, [binding.canonical_device_id]);
+
+  /* The same delivery again (alias echo / TTN retry) is a duplicate row: no second notify. */
+  const dup = harness({ async insert() { return { error: { code: '23505', message: 'duplicate key violates "telemetry_ttn_scoped_delivery"' } }; } });
+  assert.equal((await dup.handler(request(withFix))).status, 200);
+  assert.deepEqual(dup.notified, []);
+
+  /* A packet without a GPS position stores a row but cannot move the forecast. */
+  const noFix = harness();
+  assert.equal((await noFix.handler(request())).status, 200);
+  assert.equal(noFix.inserts[0].row.lat, null);
+  assert.deepEqual(noFix.notified, []);
+
+  /* Wildlife detections are not fixes. */
+  const ctt = Buffer.alloc(17);
+  ctt[0] = 0x43; ctt[1] = 0x54; ctt[2] = 2;
+  ctt.writeUInt32BE(1234, 4); ctt.writeInt16BE(-87, 12); ctt[14] = 1; ctt.writeUInt16BE(3, 15);
+  const event = fixture(); event.uplink_message.f_port = 11; event.uplink_message.frm_payload = ctt.toString('base64');
+  const e = harness();
+  assert.equal((await e.handler(request(event))).status, 200);
+  assert.equal(e.inserts[0].table, 'wildlife_detections');
+  assert.deepEqual(e.notified, []);
+
+  /* The trigger can never fail the webhook. */
+  const broken = harness({ notifyNewFix() { throw new Error('github down'); } });
+  const response = await broken.handler(request(withFix));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).success, true);
 });

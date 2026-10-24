@@ -18,11 +18,14 @@ async function publicDevice(device) {
   return Boolean(data);
 }
 
+/** A view whose body changed shape gets a new tag, so a copy cached under the old one is not revalidated. */
+const ETAG_VIEWS = { path: 'path.2' };
+
 /** Weak entity tag for a stored forecast: its generation time is the only thing
  *  that changes between runs, and each view has its own body. Weak because the
  *  CDN may re-encode the bytes. */
 export function forecastEtag(forecast, view) {
-  return `W/"${view}-${Date.parse(forecast.generated_at)}"`;
+  return `W/"${ETAG_VIEWS[view] ?? view}-${Date.parse(forecast.generated_at)}"`;
 }
 
 /** RFC 7232 If-None-Match: a list of tags (or `*`), compared weakly. */

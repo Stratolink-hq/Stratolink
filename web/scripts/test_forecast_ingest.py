@@ -289,6 +289,58 @@ class CubeSpanTests(unittest.TestCase):
         self.assertEqual((ns["_uv_cache"], ns["_uv_p_cache"]), ({}, {}))
 
 
+class ForecastTubeSpanTests(unittest.TestCase):
+    """The forecast tube's time span (build_tube_fc): fix − FC_BIAS_H …
+    now + HORIZON_H + CUBE_EXTRA_H, so the recompute tier can re-anchor on new
+    fixes from the same cubes for one cron interval after the scheduled run."""
+
+    def harness(self, cube_extra_h=6):
+        seen = {}
+        ns = base_namespace(
+            FC_STEP_H=1, FC_BIAS_H=1, DEAD_RECKON_CAP_H=14 * 24, TUBE_HALF_DEG=9,
+            CUBE_EXTRA_H=cube_extra_h,
+            prefetch_fields=lambda slice_ms, p, latest: None,
+            nominal_centers=lambda slice_ms, *a: [(0.0, 0.0)] * len(slice_ms),
+            interp_track=lambda fixes_ms, t: (0.0, 0.0),
+            choose_grid_step=lambda b: 0.25,
+            sample_tube=lambda centers, half, step, slice_ms, *a, **k: (
+                seen.setdefault("slice_ms", slice_ms) and ({"grids": []}, 1, 1)),
+            write_cube=lambda *a: None,
+        )
+        lift(["build_tube_fc"], ns)
+        return ns["build_tube_fc"], seen
+
+    def test_fresh_fix_tube_reaches_horizon_plus_one_cron_interval(self):
+        build, seen = self.harness()
+        now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)   # hourly slices: exact
+        last_fix = now - timedelta(minutes=20)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            build("live", [{"lat": 0, "lon": 0, "t": iso(last_fix)}], last_fix, 0.33, 280.0, None, now)
+        slices = seen["slice_ms"]
+        first = datetime.fromtimestamp(slices[0] / 1000, timezone.utc)
+        last = datetime.fromtimestamp(slices[-1] / 1000, timezone.utc)
+        self.assertEqual(first, last_fix.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1))
+        # reach = now (the gap is inside the cap) → end = now + 24 h + 6 h.
+        self.assertAlmostEqual((last - now).total_seconds() / 3600, 30.0, delta=1.0 / 60)
+        self.assertIn("+30h fwd", out.getvalue())
+
+    def test_extra_hours_are_configurable_and_not_added_past_the_cap(self):
+        build, seen = self.harness(cube_extra_h=0)
+        now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+        last_fix = now - timedelta(minutes=20)
+        with contextlib.redirect_stdout(io.StringIO()):
+            build("live", [{"lat": 0, "lon": 0, "t": iso(last_fix)}], last_fix, 0.33, 280.0, None, now)
+        last = datetime.fromtimestamp(seen["slice_ms"][-1] / 1000, timezone.utc)
+        self.assertAlmostEqual((last - now).total_seconds() / 3600, 24.0, delta=1.0 / 60)
+        # A balloon dark longer than the cap gets no forward leg at all, extra or not.
+        build, seen = self.harness()
+        dark_fix = now - timedelta(days=20)
+        with contextlib.redirect_stdout(io.StringIO()):
+            build("dark", [{"lat": 0, "lon": 0, "t": iso(dark_fix)}], dark_fix, 480.0, 280.0, None, now)
+        last = datetime.fromtimestamp(seen["slice_ms"][-1] / 1000, timezone.utc)
+        self.assertAlmostEqual((last - dark_fix).total_seconds() / 3600, 14 * 24, delta=1.0)
+
+
 class ManifestTests(unittest.TestCase):
     def test_manifest_is_written_incrementally_per_source_and_device(self):
         with tempfile.TemporaryDirectory() as d:

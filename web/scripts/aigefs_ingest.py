@@ -216,7 +216,7 @@ def build_device(device, fixes, target_p, latest):
     # reaches "now" (mirrors the GFS/GEFS tube).
     reach = min(now, last_fix + timedelta(hours=g.DEAD_RECKON_CAP_H))
     reached_now = reach >= now - timedelta(hours=AIGEFS_STEP_H)
-    end = reach + timedelta(hours=g.HORIZON_H + AIGEFS_STEP_H if reached_now else 0)
+    end = reach + timedelta(hours=g.HORIZON_H + g.CUBE_EXTRA_H + AIGEFS_STEP_H if reached_now else 0)
     start = g.floor_step(last_fix, AIGEFS_STEP_H)
     times = []
     t = start

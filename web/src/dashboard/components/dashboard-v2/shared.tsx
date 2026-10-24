@@ -94,3 +94,7 @@ export function fmtAltitudeM(v: number | null): string {
     if (v === null || !Number.isFinite(v)) return '-';
     return `${Math.round(v).toLocaleString()} m`;
 }
+
+/** An estimated position (no packets since the last fix): the map's drift line and the
+ *  slider's stretch after the last packet. */
+export const ESTIMATED_COLOR = 'rgba(90, 110, 135, 0.85)';

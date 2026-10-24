@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck, faChevronRight, faCopy, faXmark } from '@fortawesome/free-solid-svg-icons';
 import { useCommunity } from './community-account';
-import { BalloonOwner } from './BalloonIdentity';
 import type { ConnectionResponse, RegisteredBalloon, TTNCluster, TTNConnection } from '@/lib/community/types';
 import BalloonRegistrationForm, { FieldTip, radioRegions, savedRegionalEuis } from './BalloonRegistrationForm';
 import { validClaimToken } from '@/lib/community/onboarding';
@@ -24,7 +23,7 @@ function CopyValue({ value, label, secret = false }: { value: string; label: str
     </span>{failed && <span role="status">Select the field to copy it.</span>}</label>;
 }
 
-function ManagedBalloon({ balloon }: { balloon: RegisteredBalloon }) {
+export function ManagedBalloon({ balloon }: { balloon: RegisteredBalloon }) {
     const community = useCommunity();
     const [error, setError] = useState('');
     const [webhook, setWebhook] = useState<ConnectionResponse['webhook']>();
@@ -58,7 +57,7 @@ function ManagedBalloon({ balloon }: { balloon: RegisteredBalloon }) {
 
     return <div className="managed-balloon">
         <div className="managed-balloon-row">
-            <div><strong>{balloon.callsign}</strong>{balloon.sharedWith?.length ? <div className="community-coowners" aria-label="Shared owners">{balloon.sharedWith.map(login => <BalloonOwner key={login} device={{ownerGithub:login}} />)}</div> : <BalloonOwner device={{ownerGithub:balloon.ownerGithub ?? undefined}} />}{balloon.devEui && <small>{balloon.devEui}</small>}</div>
+            <span className="community-field-label">Flight status</span>
             <select aria-label={`Status of ${balloon.callsign}`} value={balloon.status} disabled={community.busy} onChange={async event => {
                 setError('');
                 try { await community.update(balloon.id, event.target.value); }
@@ -70,13 +69,12 @@ function ManagedBalloon({ balloon }: { balloon: RegisteredBalloon }) {
         <details className="community-connect community-settings">
             <summary><span>Launch and settings</span><FontAwesomeIcon icon={faChevronRight} /></summary>
             <BalloonRegistrationForm balloon={balloon} busy={community.busy} onSubmit={input => community.update(balloon.id, input)} />
-        </details>
         {balloon.connections.length > 0 && <ul className="community-connections">{balloon.connections.map(connection => <li key={connection.id}><span>{connection.region || connection.cluster}<small>{connection.applicationId}</small><small className="community-connection-status">{connection.lastReceivedAt ? `Last received ${new Date(connection.lastReceivedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : 'Awaiting telemetry'}</small></span>{connection.managedBy === 'stratolink' ? <span className="community-managed-network">Managed by Stratolink</span> : <button className="community-text-button" disabled={community.busy} onClick={() => {
             setReconnecting(connection); setError(''); setWebhook(undefined);
             if (details.current) details.current.open = true;
         }}>Reconnect</button>}</li>)}</ul>}
         <details className="community-connect" ref={details} open={!balloon.connections.length || undefined}>
-            <summary><span>{reconnecting ? 'Reconnect TTN' : balloon.connections.length ? 'Add a network' : 'Connect TTN'}</span><FontAwesomeIcon icon={faChevronRight} /></summary>
+            <summary><span>{reconnecting ? 'Reconnect TTN' : balloon.connections.length ? 'Connect another TTN application' : 'Connect TTN'}</span><FontAwesomeIcon icon={faChevronRight} /></summary>
             {!reconnecting && Object.keys(regionalEuis).length > 0 && <label className="community-field community-saved-region">Saved region<select value={selectedRegion} onChange={event => setSelectedRegion(event.target.value)}><option value="">Choose a region</option>{radioRegions.filter(region => regionalEuis[region.value]).map(region => <option key={region.value} value={region.value}>{region.label}</option>)}</select></label>}
             <form key={reconnecting?.id ?? selectedRegion} onSubmit={connect} autoComplete="off">
                 <div className="community-connection-row">
@@ -96,6 +94,7 @@ function ManagedBalloon({ balloon }: { balloon: RegisteredBalloon }) {
             <CopyValue label="Authorization header" value={`Bearer ${webhook.secret}`} secret />
             <button className="community-text-button" onClick={() => setWebhook(undefined)}>Done</button>
         </div>}
+        </details>
         {error && <p className="community-error" id={errorId} role="alert">{error}</p>}
     </div>;
 }
@@ -122,7 +121,7 @@ export default function CommunityPanel() {
         try { await community.reserve(String(data.get('callsign'))); }
         catch (error) { setError(error instanceof Error ? error.message : 'Unable to reserve this callsign.'); }
     }
-    return <div className="community-expand" data-open={Boolean(community.panel)} data-panel={community.panel ?? undefined} inert={!community.panel}>
+    return <div className="community-expand" data-open={Boolean(community.panel && community.panel !== 'manage')} data-panel={community.panel ?? undefined} inert={!community.panel || community.panel === 'manage'}>
         <div className="community-expand-inner"><section className="community-panel" aria-label={community.panel === 'manage' ? 'Manage balloons' : community.panel === 'activate' ? 'Claim payload' : community.panel === 'reserve' ? 'Reserve a callsign' : 'Register a balloon'}>
             {(community.panel === 'activate' || community.panel === 'reserve') && <div className="community-panel-title"><h2>{community.panel === 'activate' ? 'Claim payload' : 'Reserve a callsign'}</h2><button type="button" className="community-close" aria-label="Cancel onboarding" disabled={community.busy} onClick={() => community.setPanel(null)}><FontAwesomeIcon icon={faXmark} /></button></div>}
             {community.panel === 'activate' && <>
@@ -143,12 +142,6 @@ export default function CommunityPanel() {
                 {error && <p className="community-error" role="alert">{error}</p>}
             </form> : <p>Sign in to reserve a callsign.</p>)}
             {community.panel === 'register' && <BalloonRegistrationForm busy={community.busy} onSubmit={community.register} />}
-            {community.panel === 'manage' && <div className="community-managed">
-                <div className="community-panel-title"><h2>Your balloons</h2><button className="community-close" aria-label="Close account panel" onClick={() => community.setPanel(null)}><FontAwesomeIcon icon={faXmark} /></button></div>
-                {community.balloons.map(balloon => <ManagedBalloon key={balloon.id} balloon={balloon} />)}
-                {!community.balloons.length && <p>No balloons registered yet.</p>}
-                <button className="community-text-button" disabled={community.busy} onClick={() => community.setPanel('register')}>Register a balloon</button>
-            </div>}
         </section></div>
     </div>;
 }
