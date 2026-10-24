@@ -25,9 +25,7 @@ async function previewForecast(request, response) {
     return response.end();
   }
   try {
-    const url = new URL(request.url, 'http://localhost');
-    if (url.searchParams.get('view') === 'position') url.searchParams.set('view', 'full');
-    const query = url.search;
+    const query = new URL(request.url, 'http://localhost').search;
     const upstream = await fetch(`https://stratolink.org/api/forecast${query}`, {
       method: request.method,
       signal: AbortSignal.timeout(15000),

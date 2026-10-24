@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowRight, faClock } from '@fortawesome/free-solid-svg-icons';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { adjacentPacketTime, historyRange, type TimelineHistories } from '@/lib/telemetry/timelineHistory';
+import { ESTIMATED_COLOR } from './shared';
+import { adjacentPacketTime, createRail, historyRange, type TimeSpan, type TimelineHistories } from '@/lib/telemetry/timelineHistory';
 import { tzName } from '@/lib/telemetry/telemetryV3Format';
 
 /* ──────────────────────────────────────────────────────────────
@@ -18,8 +19,14 @@ const PRECISE_PULL = [30, 60, 90] as const;
 const PRECISE_GAIN = [1, 0.5, 0.25, 0.1] as const;
 const PRECISE_LABEL = ['', '0.5×', '0.25×', '0.1×'] as const;
 
-export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange, futureEndT, originT = null, floating = false, archived = false }: {
+export default function Timeline({ histories, spans = null, estimated = false, scrubT, onScrub, onScrubbingChange, futureEndT, originT = null, floating = false, archived = false }: {
     histories: TimelineHistories;
+    /* Only these stretches of time are on the rail (e.g. when balloons were
+     * flying), each separated by a short break. Null = one continuous rail. */
+    spans?: readonly TimeSpan[] | null;
+    /* Time after the last packet is an estimated position (drawn dashed grey,
+     * like the map's estimated line), not a forecast (blue). */
+    estimated?: boolean;
     scrubT: number | null;
     /* Estimated "now" (dead-reckoned forecast origin); the live cursor parks here
      * instead of the last packet, matching the balloon's estimated position. */
@@ -38,7 +45,7 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
     archived?: boolean;
 }) {
     const trackRef = useRef<HTMLDivElement | null>(null);
-    /* Pull-down precise-scrub state: an accumulated scrub time (so reduced-gain
+    /* Pull-down precise-scrub state: an accumulated rail position (so reduced-gain
      * drags integrate finger motion rather than snap to absolute X), the last
      * touch X, and the active precision tier (0 = full speed). */
     const scrubAccumRef = useRef<number | null>(null);
@@ -64,7 +71,7 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
     }, []);
     const nowBase = clientNow ?? 0;
     const range = useMemo(() => historyRange(histories), [histories]);
-    const tStart = range?.start ?? nowBase - 24 * 3600 * 1000;
+    const tStart = spans?.length ? spans[0].start : range?.start ?? nowBase - 24 * 3600 * 1000;
     /* Last real packet — the default load point and the boundary between
      * observed track (red) and forecast (blue). NOT "live". */
     const packetEndT = range?.end ?? nowBase;
@@ -74,10 +81,20 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
     const forecastEndT = !archived && futureEndT !== null && futureEndT > packetEndT ? futureEndT : packetEndT;
     /* Rail spans far enough to include both the forecast horizon and "now". */
     const tEnd = Math.max(forecastEndT, liveT, packetEndT);
-    const span = tEnd - tStart || 1;
     const hasFuture = forecastEndT > packetEndT;
+    /* The last span runs on to the rail's end ("now" or the forecast horizon). */
+    const rail = useMemo(() => createRail(spans?.length
+        ? [...spans.slice(0, -1), { start: spans[spans.length - 1].start, end: Math.max(spans[spans.length - 1].end, tEnd) }]
+        : [{ start: tStart, end: Math.max(tEnd, tStart + 1) }]), [spans, tStart, tEnd]);
 
-    const pct = (t: number) => Math.max(0, Math.min(100, ((t - tStart) / span) * 100));
+    const pct = (t: number) => Math.max(0, Math.min(100, rail.toFrac(t) * 100));
+    /* [a, b] (percent of the rail) cut at the breaks between spans. */
+    const pieces = (a: number, b: number) => rail.spans.flatMap(({ from, to }) => {
+        const left = Math.max(a, from * 100), right = Math.min(b, to * 100);
+        return right > left ? [{ left, width: right - left }] : [];
+    });
+    const breaks = rail.spans.slice(1).map((span, i) => ({ left: rail.spans[i].to * 100, width: (span.from - rail.spans[i].to) * 100,
+        title: `No flights ${fmtClock(rail.spans[i].end)} to ${fmtClock(span.start)}` }));
     const nowFrac = pct(packetEndT);
     const liveFrac = pct(liveT);
     const cursorT = scrubT ?? originT ?? packetEndT;  // live parks at the estimated "now" (else last packet)
@@ -85,8 +102,12 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
     const elapsedW = Math.min(fraction, nowFrac);
 
     const cursorInFuture = cursorT > packetEndT;
-    /* Future leg = the forecast, which is drawn blue on the map. */
-    const handleColor = cursorInFuture ? 'var(--sl-forecast)' : 'var(--sl-ok)';
+    /* Future leg = the forecast, drawn blue on the map; or, for an estimate, grey. */
+    const aheadColor = estimated ? ESTIMATED_COLOR : 'var(--sl-forecast)';
+    const handleColor = cursorInFuture ? aheadColor : 'var(--sl-ok)';
+    /* The estimated stretch: last packet → now, whether or not the cursor is in it. */
+    const estimateFrac = estimated && liveFrac > nowFrac ? Math.max(liveFrac, fraction) : null;
+    const estimateTitle = `Estimated position: no packets since ${fmtClock(packetEndT)}`;
     const labelLeft = Math.max(7, Math.min(93, fraction));
     /* Mobile clock width, measured so it can be centered on the thumb yet clamped
      * inside the track (and clear of anything parked at its left, via CSS). */
@@ -136,9 +157,8 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
         const el = trackRef.current;
         if (el) {
             const rect = el.getBoundingClientRect();
-            const f = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-            scrubAccumRef.current = tStart + span * f;
-            onScrub(scrubAccumRef.current);
+            scrubAccumRef.current = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+            onScrub(rail.toTime(scrubAccumRef.current));
         }
         lastTouchXRef.current = clientX;
         setTier(0);
@@ -150,11 +170,10 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
         const tier = tierFromY(clientY, rect);
         const dx = clientX - lastTouchXRef.current;
         lastTouchXRef.current = clientX;
-        const dt = (dx / rect.width) * span * PRECISE_GAIN[tier];
-        const base = scrubAccumRef.current ?? cursorT;
-        const next = Math.max(tStart, Math.min(tEnd, base + dt));
+        const base = scrubAccumRef.current ?? rail.toFrac(cursorT);
+        const next = Math.max(0, Math.min(1, base + (dx / rect.width) * PRECISE_GAIN[tier]));
         scrubAccumRef.current = next;
-        onScrub(next);
+        onScrub(rail.toTime(next));
         setTier(tier);
     };
     const endDrag = () => {
@@ -181,15 +200,16 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
         let next: number;
         if (event.key === 'Home') next = tStart;
         else if (event.key === 'End') next = tEnd;
-        /* Arrows step 1% of the rail; Shift+arrows jump packet to packet. */
+        /* Arrows step 1% of the rail; Shift+arrows jump packet to packet,
+         * hopping the breaks rather than stopping on packets inside them. */
         else if (event.key === 'ArrowLeft') {
             next = event.shiftKey
-                ? adjacentPacketTime(histories, cursorT, 'previous') ?? tStart
-                : Math.max(tStart, cursorT - span / 100);
+                ? rail.snap(adjacentPacketTime(histories, cursorT, 'previous') ?? tStart, 'previous')
+                : rail.toTime(Math.max(0, rail.toFrac(cursorT) - 0.01));
         } else if (event.key === 'ArrowRight') {
             next = event.shiftKey
-                ? adjacentPacketTime(histories, cursorT, 'next') ?? tEnd
-                : Math.min(tEnd, cursorT + span / 100);
+                ? rail.snap(adjacentPacketTime(histories, cursorT, 'next') ?? tEnd, 'next')
+                : rail.toTime(Math.min(1, rail.toFrac(cursorT) + 0.01));
         } else return;
         event.preventDefault();
         onScrub(next);
@@ -235,7 +255,7 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
                         <FontAwesomeIcon icon={faClock} style={{ color: handleColor, fontSize: 10, flexShrink: 0 }} />
                         <span style={{
                             fontFamily: 'var(--sl-mono)', fontVariantNumeric: 'tabular-nums', fontSize: 11, fontWeight: 500,
-                            color: cursorInFuture ? 'var(--sl-forecast)' : 'var(--sl-text-hi)', whiteSpace: 'nowrap',
+                            color: cursorInFuture ? aheadColor : 'var(--sl-text-hi)', whiteSpace: 'nowrap',
                         }}>
                             {fmtClock(cursorT)}
                             {/* Fixed-width slot so the relative label (live / +18hr /
@@ -243,7 +263,7 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
                               * resize the track as you scrub. Widest is ~"−2160hr"
                               * (full-history start) ≈ 7 monospace chars. */}
                             <span style={{
-                                color: cursorIsLive ? 'var(--sl-ok)' : cursorInFuture ? 'var(--sl-forecast)' : 'var(--sl-text-dim2)',
+                                color: cursorIsLive ? 'var(--sl-ok)' : cursorInFuture ? aheadColor : 'var(--sl-text-dim2)',
                                 marginLeft: 5, display: 'inline-block', minWidth: '7ch', textAlign: 'left',
                             }}>
                                 {relLabel}
@@ -280,29 +300,42 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
                             pointerEvents: 'none',
                             fontFamily: 'var(--sl-mono)', fontVariantNumeric: 'tabular-nums',
                             fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap',
-                            color: cursorInFuture ? 'var(--sl-forecast)' : 'var(--sl-text-hi)',
+                            color: cursorInFuture ? aheadColor : 'var(--sl-text-hi)',
                             textShadow: '0 1px 3px var(--sl-overlay-bg)',
                         }}>
                             {fmtClock(cursorT)}
-                            <span style={{ color: preciseTier > 0 || cursorIsLive ? 'var(--sl-ok)' : cursorInFuture ? 'var(--sl-forecast)' : 'var(--sl-text-dim2)', fontWeight: preciseTier > 0 ? 600 : undefined, marginLeft: 5 }}>
+                            <span style={{ color: preciseTier > 0 || cursorIsLive ? 'var(--sl-ok)' : cursorInFuture ? aheadColor : 'var(--sl-text-dim2)', fontWeight: preciseTier > 0 ? 600 : undefined, marginLeft: 5 }}>
                                 {mobileRelLabel}
                             </span>
                         </div>
                     )}
-                    {/* recessed rail groove — reads as a slider track */}
-                    <div style={{ position: 'absolute', top: 'calc(50% - 2px)', left: 0, right: 0, height: 4, borderRadius: 2, background: 'var(--sl-bg-2)', border: '1px solid var(--sl-border)' }} />
+                    {/* recessed rail groove — reads as a slider track, broken
+                      * where time is left out */}
+                    {pieces(0, 100).map(({ left, width }) => (
+                        <div key={`groove-${left}`} style={{ position: 'absolute', top: 'calc(50% - 2px)', left: `${left}%`, width: `${width}%`, height: 4, borderRadius: 2, background: 'var(--sl-bg-2)', border: '1px solid var(--sl-border)', boxSizing: 'border-box' }} />
+                    ))}
+                    {breaks.map(({ left, width, title }) => (
+                        <div key={`break-${left}`} title={title} style={{ position: 'absolute', top: 0, bottom: 0, left: `${left}%`, width: `${width}%` }} />
+                    ))}
                     {/* forecast horizon — dashed extension on the rail */}
-                    {hasFuture && (
-                        <div style={{ position: 'absolute', top: 'calc(50% - 0.5px)', left: `${nowFrac}%`, width: `${100 - nowFrac}%`, height: 0, borderTop: '1.5px dashed var(--sl-forecast-dashed)' }} />
-                    )}
+                    {hasFuture && pieces(nowFrac, 100).map(({ left, width }) => (
+                        <div key={`horizon-${left}`} style={{ position: 'absolute', top: 'calc(50% - 0.5px)', left: `${left}%`, width: `${width}%`, height: 0, borderTop: '1.5px dashed var(--sl-forecast-dashed)' }} />
+                    ))}
                     {/* elapsed fill */}
-                    <div style={{ position: 'absolute', top: 'calc(50% - 2px)', left: 0, width: `${elapsedW}%`, height: 4, borderRadius: 2, background: 'var(--sl-ok)' }} />
-                    {fraction > nowFrac && (
-                        <div style={{ position: 'absolute', top: 'calc(50% - 2px)', left: `${nowFrac}%`, width: `${fraction - nowFrac}%`, height: 4, borderRadius: 2, background: 'var(--sl-forecast)' }} />
-                    )}
+                    {pieces(0, elapsedW).map(({ left, width }) => (
+                        <div key={`elapsed-${left}`} style={{ position: 'absolute', top: 'calc(50% - 2px)', left: `${left}%`, width: `${width}%`, height: 4, borderRadius: 2, background: 'var(--sl-ok)' }} />
+                    ))}
+                    {estimateFrac === null && pieces(nowFrac, fraction).map(({ left, width }) => (
+                        <div key={`ahead-${left}`} style={{ position: 'absolute', top: 'calc(50% - 2px)', left: `${left}%`, width: `${width}%`, height: 4, borderRadius: 2, background: 'var(--sl-forecast)' }} />
+                    ))}
+                    {estimateFrac !== null && pieces(nowFrac, estimateFrac).map(({ left, width }) => (
+                        <div key={`estimate-${left}`} title={estimateTitle} style={{ position: 'absolute', top: 0, bottom: 0, left: `${left}%`, width: `${width}%` }}>
+                            <div style={{ position: 'absolute', top: 'calc(50% - 1px)', left: 0, right: 0, height: 0, borderTop: `2px dashed ${ESTIMATED_COLOR}` }} />
+                        </div>
+                    ))}
                     {/* last-transmission notch — boundary between observed track
-                      * and forecast. */}
-                    {hasFuture && (
+                      * and forecast or estimate. */}
+                    {(hasFuture || estimateFrac !== null) && (
                         <div style={{ position: 'absolute', top: 'calc(50% - 3px)', left: `calc(${nowFrac}% - 3px)`, width: 6, height: 6, borderRadius: '50%', background: PAPER, border: '1px solid var(--sl-text-dim2)' }} />
                     )}
                     {/* live marker — the real current time on the rail */}
@@ -354,24 +387,36 @@ export default function Timeline({ histories, scrubT, onScrub, onScrubbingChange
                 <div style={{
                     position: 'absolute', top: -1, left: `${labelLeft}%`, transform: 'translateX(-50%)',
                     fontFamily: 'var(--sl-mono)', fontVariantNumeric: 'tabular-nums', fontSize: 10.5, fontWeight: 500,
-                    color: cursorIsLive ? 'var(--sl-ok)' : cursorInFuture ? 'var(--sl-forecast)' : 'var(--sl-text-hi)', whiteSpace: 'nowrap', pointerEvents: 'none',
+                    color: cursorIsLive ? 'var(--sl-ok)' : cursorInFuture ? aheadColor : 'var(--sl-text-hi)', whiteSpace: 'nowrap', pointerEvents: 'none',
                 }}>
                     {fmtClock(cursorT)} - {relLabel}
                 </div>
-                <div style={{ position: 'absolute', top: 22, left: 0, right: 0, height: 1, background: 'var(--sl-border-hi)' }} />
-                {hasFuture && (
-                    <div style={{ position: 'absolute', top: 21.5, left: `${nowFrac}%`, width: `${100 - nowFrac}%`, height: 0, borderTop: '1px dashed var(--sl-forecast-dashed)' }} />
-                )}
-                <div style={{ position: 'absolute', top: 21, left: 0, width: `${elapsedW}%`, height: 2, background: 'var(--sl-ok)' }} />
-                {fraction > nowFrac && (
-                    <div style={{ position: 'absolute', top: 21, left: `${nowFrac}%`, width: `${fraction - nowFrac}%`, height: 2, background: 'var(--sl-forecast)' }} />
-                )}
+                {pieces(0, 100).map(({ left, width }) => (
+                    <div key={`base-${left}`} style={{ position: 'absolute', top: 22, left: `${left}%`, width: `${width}%`, height: 1, background: 'var(--sl-border-hi)' }} />
+                ))}
+                {breaks.map(({ left, width, title }) => (
+                    <div key={`break-${left}`} title={title} style={{ position: 'absolute', top: 0, bottom: 0, left: `${left}%`, width: `${width}%` }} />
+                ))}
+                {hasFuture && pieces(nowFrac, 100).map(({ left, width }) => (
+                    <div key={`horizon-${left}`} style={{ position: 'absolute', top: 21.5, left: `${left}%`, width: `${width}%`, height: 0, borderTop: '1px dashed var(--sl-forecast-dashed)' }} />
+                ))}
+                {pieces(0, elapsedW).map(({ left, width }) => (
+                    <div key={`elapsed-${left}`} style={{ position: 'absolute', top: 21, left: `${left}%`, width: `${width}%`, height: 2, background: 'var(--sl-ok)' }} />
+                ))}
+                {estimateFrac === null && pieces(nowFrac, fraction).map(({ left, width }) => (
+                    <div key={`ahead-${left}`} style={{ position: 'absolute', top: 21, left: `${left}%`, width: `${width}%`, height: 2, background: 'var(--sl-forecast)' }} />
+                ))}
+                {estimateFrac !== null && pieces(nowFrac, estimateFrac).map(({ left, width }) => (
+                    <div key={`estimate-${left}`} title={estimateTitle} style={{ position: 'absolute', top: 14, height: 16, left: `${left}%`, width: `${width}%` }}>
+                        <div style={{ position: 'absolute', top: 7, left: 0, right: 0, height: 0, borderTop: `1.5px dashed ${ESTIMATED_COLOR}` }} />
+                    </div>
+                ))}
                 <svg width="100%" height="30" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
-                    {histories.map((rows, group) => rows.map((r, i) => (
+                    {histories.map((rows, group) => rows.filter(r => rail.snap(r.t, 'next') === r.t).map((r, i) => (
                         <line key={`${group}:${i}`} x1={`${pct(r.t)}%`} y1="25" x2={`${pct(r.t)}%`} y2="28" stroke="var(--sl-text-dim3)" strokeOpacity="0.55" />
                     )))}
                 </svg>
-                {hasFuture && (
+                {(hasFuture || estimateFrac !== null) && (
                     <div style={{ position: 'absolute', top: 19.5, left: `calc(${nowFrac}% - 2.5px)`, width: 5, height: 5, borderRadius: '50%', background: 'var(--sl-bg-1)', border: '1px solid var(--sl-text-dim2)' }} />
                 )}
                 {/* live marker — the real current time on the rail */}
