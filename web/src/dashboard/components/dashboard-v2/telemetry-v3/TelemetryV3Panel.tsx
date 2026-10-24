@@ -269,7 +269,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
             {showHeader && (
             <div style={{ borderBottom: compact ? undefined : '1px solid var(--t-border)', flexShrink: 0 }}>
                 <h1 className="dashboard-device-title">{device ? balloonName(device) : 'Balloon'} <OfficialBadge official={device?.official} /></h1>
-                {device?.ownerGithub && <div className="detail-owner"><BalloonOwner device={device} /></div>}
+                {device && (device.official || device.ownerGithub) && <div className="detail-owner"><BalloonOwner device={device} /></div>}
                 <div style={{ padding: compact ? '8px var(--telemetry-gutter, 18px) 0' : '12px var(--telemetry-gutter, 18px) 0' }}>
                     {/* One line: when it doesn't fit, the time wraps onto a clipped second line, then the date ellipsizes. */}
                     <div className="detail-status-line">

@@ -4,8 +4,10 @@ import type { DeviceSummary } from './useTelemetry';
 export function OfficialBadge({ official }: { official?: boolean }) {
     return official === true ? <span className="official-badge" title="Operated by Stratolink">Official</span> : null;
 }
-export function BalloonOwner({ device, link = true }: { link?: boolean; device: Pick<DeviceSummary,'ownerGithub'> }) {
-    if (!device.ownerGithub) return null;
-    const content = <><FontAwesomeIcon icon={faGithub} aria-hidden /> @{device.ownerGithub}</>;
-    return !link ? <span className="balloon-owner">{content}</span> : <a className="balloon-owner" href={`https://github.com/${encodeURIComponent(device.ownerGithub)}`} target="_blank" rel="noreferrer">{content}</a>;
+export function BalloonOwner({ device, link = true }: { link?: boolean; device: Pick<DeviceSummary,'ownerGithub' | 'official'> }) {
+    const login = device.official ? 'Stratolink-hq' : device.ownerGithub;
+    const label = device.official ? 'stratolink' : login;
+    if (!login) return null;
+    const content = <><FontAwesomeIcon icon={faGithub} aria-hidden /> @{label}</>;
+    return !link ? <span className="balloon-owner">{content}</span> : <a className="balloon-owner" href={`https://github.com/${encodeURIComponent(login)}`} target="_blank" rel="noreferrer">{content}</a>;
 }
