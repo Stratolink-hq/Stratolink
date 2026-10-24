@@ -80,7 +80,7 @@ const CardHeading = memo(function CardHeading({ device }: { device: DeviceSummar
             <span className="balloon-card-name"><span className="balloon-card-title">{balloonName(device)}</span><OfficialBadge official={device.official} /></span>
             <FontAwesomeIcon icon={faChevronRight} className="balloon-card-chevron" />
         </span>
-        {device.ownerGithub && <BalloonOwner device={device} link={false} />}
+        {(device.official || device.ownerGithub) && <BalloonOwner device={device} link={false} />}
     </>;
 });
 
