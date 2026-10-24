@@ -11,7 +11,7 @@ export interface ForecastData {
     generated_at?: unknown;
 }
 export type ForecastResponse = { status: number; data: ForecastData | null };
-export type ForecastView = 'full' | 'path' | 'history';
+export type ForecastView = 'full' | 'path' | 'history' | 'position';
 type FetchForecast = (id: string, signal: AbortSignal, view: ForecastView) => Promise<ForecastResponse>;
 type Subscriber = { resolve: (result: ForecastResponse) => void; reject: (error: unknown) => void; cleanup: () => void };
 type Job = { id: string; key: string; view: ForecastView; controller: AbortController; subscribers: Set<Subscriber> };

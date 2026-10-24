@@ -131,13 +131,19 @@ export function usePortalCamera(mapRef: RefObject<MapRef | null>, stage: GlobeSt
             frame = requestAnimationFrame(spin);
         } else {
             const panel = document.querySelector('.fleet-panel');
+            let previousPadding = '';
             const position = () => {
                 const mobile = innerWidth < 768;
                 const bounds = panel?.getBoundingClientRect();
                 const left = mobile ? 0 : (bounds?.width ?? 420);
-                const top = mobile ? Math.min(bounds?.height ?? 350, innerHeight * .55) : 0;
+                const drawer = mobile && Boolean(document.querySelector('[data-mobile-drawer="true"]'));
+                const top = mobile && !drawer ? Math.min(bounds?.height ?? 350, innerHeight * .55) : 0;
                 document.documentElement.style.setProperty('--portal-panel-height', `${top}px`);
-                map.easeTo({ padding:{left, top, right:0, bottom:mobile ? 40 : 0}, duration:reduced ? 0 : 700 });
+                const padding = {left, top, right:0, bottom:mobile ? 40 : 0};
+                const key = JSON.stringify(padding);
+                if (key === previousPadding) return;
+                previousPadding = key;
+                map.easeTo({ padding, duration:reduced ? 0 : 700 });
             };
             position();
             if (panel) { observer = new ResizeObserver(position); observer.observe(panel); }

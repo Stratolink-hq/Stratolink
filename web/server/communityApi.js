@@ -1,3 +1,6 @@
+import { readPrivateForecast } from './forecastStorage.js';
+import { sanitizeForecast } from './locationPrivacy.js';
+import { projectedPosition } from '../shared/projectedPosition.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { createServerSupabase } from './supabaseServer.js';
 import { payloadIdPattern, claimTokenPattern, readClaimIntent, writeClaimIntent, clearClaimIntent, publicClaimIntent } from './payloadClaim.js';
@@ -114,7 +117,7 @@ export async function verifyTTNDevice({ cluster, applicationId, deviceEui, apiKe
   return { cluster, applicationId, deviceEui, deviceId, region: plan };
 }
 
-export function createCommunityApi({ createDb = createServerSupabase, verifyDevice = verifyTTNDevice, environment = process.env } = {}) {
+export function createCommunityApi({ createDb = createServerSupabase, verifyDevice = verifyTTNDevice, environment = process.env, readForecast = readPrivateForecast } = {}) {
   return async function community(request) {
     try {
       const url = new URL(request.url);
@@ -248,7 +251,15 @@ export function createCommunityApi({ createDb = createServerSupabase, verifyDevi
         }
         exactFields(body, ['status']);
         if (!statuses.has(body.status)) return reply(400, { error: 'Invalid status' });
-        const balloon = await rpc('update_community_balloon', { p_owner_id: user.id, p_device_id: deviceId, p_status: body.status });
+        let frozen = null;
+        if (body.status === 'missing' && owned.status === 'flying') {
+          try { const stored = await readForecast(deviceId); frozen = stored ? projectedPosition(sanitizeForecast(stored), Date.now()) : null; }
+          catch { return reply(503, { error: 'Could not save the projected position. Please try again.' }); }
+        }
+        const balloon = await rpc(body.status === 'missing' ? 'mark_balloon_missing' : 'update_community_balloon', {
+          p_owner_id: user.id, p_device_id: deviceId,
+          ...(body.status === 'missing' ? { p_position: frozen } : { p_status: body.status }),
+        });
         return balloon ? reply(200, { balloon }) : reply(404, { error: 'Balloon not found' });
       }
       exactFields(body, ['cluster','applicationId','deviceEui','apiKey']);

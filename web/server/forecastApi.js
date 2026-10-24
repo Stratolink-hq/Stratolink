@@ -9,7 +9,7 @@ import { createServerSupabase } from './supabaseServer.js';
  * balloon that just got its first forecast, or a transient outage, is never
  * pinned. */
 const CACHEABLE = 'public, s-maxage=300, stale-while-revalidate=3600';
-const VIEWS = new Set(['full', 'path', 'history']);
+const VIEWS = new Set(['full', 'path', 'history', 'position']);
 
 async function publicDevice(device) {
   const { data, error } = await createServerSupabase().from('devices').select('device_id')

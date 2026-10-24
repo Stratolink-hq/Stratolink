@@ -17,6 +17,7 @@ import './styles/header.css';
 import './styles/fleet.css';
 import './styles/globe-portal.css';
 import './styles/community.css';
+import './styles/mobile-drawer.css';
 
 config.autoAddCss = false;
 

@@ -24,7 +24,7 @@ export function sanitizeTelemetry(row) {
 }
 export function sanitizeDevice(row) {
   const position = publicPosition(row.launch_lat, row.launch_lon);
-  return { ...row, launch_lat: position.lat, launch_lon: position.lon, location_approximate: position.location_approximate ?? false };
+  return { ...row, frozen_position: row.frozen_position ? { ...row.frozen_position, ...publicPosition(row.frozen_position.lat, row.frozen_position.lon) } : null, launch_lat: position.lat, launch_lon: position.lon, location_approximate: position.location_approximate ?? false };
 }
 function sanitizeGeometry(value) {
   if (Array.isArray(value)) {
@@ -40,6 +40,7 @@ function sanitizeGeometry(value) {
   return result;
 }
 export function sanitizeForecast(raw, view = 'full') {
+  if (view === 'position') return sanitizeGeometry({ nominal_path: raw.nominal_path ?? [], forecast_origin: { time_utc: raw.forecast_origin?.time_utc }, forecast_horizon_h: raw.forecast_horizon_h, generated_at: raw.generated_at });
   if (view === 'path') return sanitizeGeometry({ generated_at: raw.generated_at, nominal_path: raw.nominal_path ?? [] });
   // History only: the reconstructed track through past GPS gaps, for balloons that are no longer flying.
   if (view === 'history') {
