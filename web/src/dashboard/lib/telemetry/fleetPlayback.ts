@@ -55,17 +55,13 @@ export function balloonName(device: { callsign: string | null; id: string }) {
     return (device.callsign || device.id).replace(/^stratolink[- ](\d+)$/i, 'Stratolink $1');
 }
 
-/** Active means a recent uplink from a mission that is not marked complete. */
+/** Flight status is controlled by the owner, independently of packet age. */
 export function fleetActivity(
     devices: Array<{ id: string; status: string }>,
     rowsByDevice: Record<string, TelemetryRow[]>,
     now: number,
 ) {
-    const active = devices.filter(device => {
-        if (['landed', 'recovered', 'retired', 'lost', 'idle', 'planned', 'storage'].includes(device.status.toLowerCase())) return false;
-        const latest = rowsByDevice[device.id]?.at(-1)?.t;
-        return latest != null && latest <= now && now - latest < 15 * 60_000;
-    }).length;
+    const active = devices.filter(device => device.status.toLowerCase() === 'flying').length;
     return { active, inactive: devices.length - active };
 }
 

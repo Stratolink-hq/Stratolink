@@ -9,7 +9,7 @@ const devices = [
     {id:'live', callsign:'Zenith', ownerGithub:'pilot', ownerId:'owner-123', status:'flying', lastContactT:now-100, launchedAt:400},
 ];
 const filter = (changes, owner=null) => filterFleet(devices, {...defaultFleetFilters,...changes}, owner, now).map(d=>d.id);
-test('active filters use freshness and preserve terminal states', () => {
+test('active filters follow owner status and preserve terminal states', () => {
     assert.equal(isActiveBalloon(devices[0],now),false);
     assert.deepEqual(filter({inactive:false}),['live']);
     assert.deepEqual(filter({active:false}),['stratolink-2','stratolink-3']);
@@ -28,7 +28,7 @@ test('search accepts display names and ownership filter requires an account', ()
 test('registered terminal status takes precedence over replay status', () => {
     assert.equal(registeredStatus('landed'),'Landed');
     assert.equal(registeredStatus('missing'),'Missing');
-    assert.equal(registeredStatus('flying'),null);
+    assert.equal(registeredStatus('flying'),'Flying');
 });
 test('planned launches have their own opt-in filter, including owned launches', () => {
     assert.deepEqual(filter({planned:true,active:false,inactive:false}),['draft']);
@@ -36,4 +36,13 @@ test('planned launches have their own opt-in filter, including owned launches', 
     assert.deepEqual(filter({query:'Alpha'}),[]);
     assert.deepEqual(filter({query:'Alpha',planned:true}),['draft']);
     assert.deepEqual(filter({sort:'newest',planned:true}),['live','stratolink-3','stratolink-2','draft']);
+});
+
+test('flying remains active through radio silence or absent telemetry', () => {
+    for (const lastContactT of [null, now - 4 * 60 * 60_000, now - 7 * 86400_000]) {
+        assert.equal(isActiveBalloon({status:'flying',lastContactT},now),true);
+    }
+    for (const status of ['missing','landed','planned','storage','idle','lost','retired','recovered']) {
+        assert.equal(isActiveBalloon({status,lastContactT:now},now),false);
+    }
 });
