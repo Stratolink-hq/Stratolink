@@ -23,13 +23,18 @@ test('forecast serves sanitized private stored data only for a connected public 
 });
 
 test('fleet path responses preserve privacy and omit detail geometry and metadata', async () => {
-  const raw = { ...fixture, ensemble: [[[10, 20], [30, 40]]], ellipses: [{ e90: { polygon: [[10, 20], [30, 40], [10, 20]] } }] };
+  const raw = { ...fixture, ensemble: [[[10, 20], [30, 40]]], ellipses: [{ e90: { polygon: [[10, 20], [30, 40], [10, 20]] } }],
+    forecast_origin: { time_utc: '2026-10-06T17:00:00Z', lat: 37.78, lon: -122.40 }, forecast_horizon_h: 24,
+    stale_gps: { gap_hours: 3, last_fix: { lat: 37.78, lon: -122.40 } }, predicted_hindcast: { path: [[-122.40, 37.78], [-121, 38]], members: 9 } };
   const handler = createForecastApi({ isPublicDevice: async () => true, readForecast: async () => raw });
   const path = response(); await handler(request('/api/forecast?device=stratolink-3&view=path'), path);
   const full = response(); await handler(request(), full);
   assert.equal(path.statusCode, 200);
   assert.equal(path.headers['Cache-Control'], CACHEABLE);
-  assert.deepEqual(path.body, { generated_at: raw.generated_at, nominal_path: full.body.nominal_path });
+  assert.deepEqual(path.body, {
+    generated_at: raw.generated_at, forecast_horizon_h: 24, forecast_origin: { time_utc: '2026-10-06T17:00:00Z' },
+    stale_gps: {}, nominal_path: full.body.nominal_path, predicted_hindcast: { path: [[-122.44, 37.76], [-121, 38]] },
+  });
   assert.deepEqual(path.body.nominal_path, [[-122.44, 37.76], [-120, 40]]);
   assert.deepEqual(full.body.ensemble, raw.ensemble);
   assert.deepEqual(full.body.ellipses, raw.ellipses);

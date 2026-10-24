@@ -34,7 +34,7 @@ import DashboardHeader from './DashboardHeader';
 import { useDashboardControls } from './dashboard-controls';
 import FleetOverview, { balloonColor, balloonTransitionName } from './FleetOverview';
 import { positionAtTime, rowAtTime, fleetActivity, previewFleet } from '@/lib/telemetry/fleetPlayback';
-import { historyRange } from '@/lib/telemetry/timelineHistory';
+import { flightSpans, historyRange } from '@/lib/telemetry/timelineHistory';
 import MapLegend from './MapLegend';
 import { useGlobePortal, notifyGlobeParent } from './globe-portal';
 import CommunityPanel from './CommunityPanel';
@@ -47,12 +47,12 @@ import { flightTrack } from '@/lib/telemetry/flightTrack';
 import { extendWithNewerFixes, liveForecastPath, timedForecastLeg } from '@/lib/telemetry/liveTrack';
 import { withLatestTelemetry } from '@/lib/telemetry/fleetSummary';
 import { useFleetReconstruction } from './useFleetReconstruction';
+import { useFleetForecasts } from './FleetProjections';
+import { estimatedLeg, lastFixTime, liveEstimateT, projectedPosition, type ForecastLegs } from '@/lib/telemetry/forecastTrack';
 import { reconstructedFlightTrack } from '@/lib/telemetry/reconstructedTrack';
 import { receivingStations } from '@/lib/telemetry/fleetPlayback';
 
 const V2MissionMap = lazy(() => import('./V2MissionMap'));
-/* Last fix older than this = GPS dark; matches the worker's STALE_GPS_THRESHOLD_H. */
-const GPS_DARK_MS = 3_600_000;
 
 interface FlightSummary {
     /** Span from first to last loaded packet, ms. Null when no data. */
@@ -70,6 +70,13 @@ function mappedPosition(rows: TelemetryRow[], time: number | null) {
         positionTracks.set(rows, track);
     }
     return positionAtTime(track, time);
+}
+
+/** A fleet balloon past its last point at `time`, carried along its forecast;
+ *  null when it isn't past it or has no usable forecast. */
+function projectedFleetPosition(track: V2FlightPoint[], forecast: ForecastLegs | undefined, time: number | null) {
+    const last = track[track.length - 1];
+    return forecast && last && time !== null && time > last.t ? projectedPosition(last, forecast, time) : null;
 }
 
 export default function MissionControlScreen() {
@@ -199,26 +206,12 @@ export default function MissionControlScreen() {
 
     /* "Now" boundary = the latest packet (observed↔forecast divide). */
     const packetEndT = visibleRows.length ? visibleRows[visibleRows.length - 1].t : null;
-    /* When GPS is dark, live shows the balloon's ESTIMATED current position, not
-     * the last fix: the real clock, carried along the forecast from its origin (the
-     * stored forecast's "now" when it was computed) and parked at its end, where the
-     * ensemble stopped agreeing. GPS counts as dark when the stored forecast says so,
-     * or once the last fix is older than the worker's own threshold (an hour), since
-     * a forecast computed while GPS was fresh doesn't know the balloon went quiet.
-     * Only a forecast that already knows the latest fix is followed; an older one
-     * would pull the marker back to a superseded estimate. Before the clock mounts it
-     * sits at the origin. When GPS is fresh the last packet IS now, so we leave the
-     * live cursor exactly where it was (no behavior change for live balloons). */
-    const lastFixT = useMemo(() => {
-        for (let i = visibleRows.length - 1; i >= 0; i--) if (visibleRows[i].lat != null && visibleRows[i].lon != null) return visibleRows[i].t;
-        return null;
-    }, [visibleRows]);
-    const originT = forecast.originT;
-    const gpsDark = forecast.staleGps || (nowMs !== null && lastFixT !== null && nowMs - lastFixT >= GPS_DARK_MS);
-    const liveEstimateT = !archived && gpsDark && originT !== null && (lastFixT === null || originT >= lastFixT)
-        ? Math.max(originT, Math.min(nowMs ?? originT, forecast.endT ?? originT))
-        : null;
-    const effectiveScrubT: number | null = followLive ? (liveEstimateT ?? packetEndT) : scrubT;
+    /* When GPS is dark, live shows the balloon's ESTIMATED current position along
+     * the forecast (see liveEstimateT). When GPS is fresh the last packet IS now,
+     * so the live cursor stays there. */
+    const lastFixT = useMemo(() => lastFixTime(visibleRows), [visibleRows]);
+    const liveT = archived ? null : liveEstimateT(forecast, lastFixT, nowMs);
+    const effectiveScrubT: number | null = followLive ? (liveT ?? packetEndT) : scrubT;
     /* In the future leg the charts hold the last real reading. */
     const isFuture = effectiveScrubT !== null && packetEndT !== null && effectiveScrubT > packetEndT;
 
@@ -316,17 +309,65 @@ export default function MissionControlScreen() {
     }, [fleetHistory.rowsByDevice, shownKey]);
     const fleetLastT = useMemo(() => historyRange(fleetHistories)?.end ?? null, [fleetHistories]);
     const fleetRecorded = fleetLastT !== null && Date.now() - fleetLastT > 15 * 60_000;
+
+    /* Flying balloons are shown where their forecast puts them, not where they
+     * last reported: a GPS-dark one is carried along its forecast to "now"
+     * (liveEstimateT), and scrubbing past its last fix follows the same line. */
+    const fleetForecastIds = useMemo(() => devices.filter(device => {
+        if (device.status.toLowerCase() !== 'flying') return false;
+        const lastT = fleetHistory.rowsByDevice[device.id]?.at(-1)?.t;
+        return lastT != null && (device.launchedAt == null || lastT >= device.launchedAt);
+    }).map(device => device.id), [devices, fleetHistory.rowsByDevice]);
+    const fleetForecasts = useFleetForecasts(isFleet ? fleetForecastIds : []);
+    const fleetLive = useMemo<Record<string, number | null>>(() => Object.fromEntries(Object.entries(fleetForecasts).map(([id, legs]) =>
+        [id, liveEstimateT(legs, lastFixTime(fleetHistory.rowsByDevice[id] ?? []), nowMs)])), [fleetForecasts, fleetHistory.rowsByDevice, nowMs]);
+    const fleetLiveTimes = Object.values(fleetLive).filter((t): t is number => t !== null);
+    const fleetLiveT = fleetLiveTimes.length ? Math.max(...fleetLiveTimes) : null;
+    /* Live while any balloon is being carried along its forecast, even with no recent packet. */
+    const fleetArchived = fleetRecorded && fleetLiveT === null;
     const fleetBalloons = useMemo<V2Balloon[]>(() => devices.flatMap(device => {
+        const projected = projectedFleetPosition(fleetTracks[device.id] ?? [], fleetForecasts[device.id], fleetScrubT ?? fleetLive[device.id] ?? null);
+        if (projected) return [{ id: device.id, ...projected, altitude_m: null }];
         const rows = fleetHistory.rowsByDevice[device.id] ?? [];
         const position = mappedPosition(rows, fleetScrubT);
         const point = fleetScrubT !== null ? lerpAlongTrack(fleetTracks[device.id] ?? [], fleetScrubT) : null;
         if (position && point) { position.lon = ((point[0] + 180) % 360 + 360) % 360 - 180; position.lat = point[1]; }
         return position ? [{ id: device.id, ...position }] : [];
-    }), [devices, fleetHistory.rowsByDevice, fleetTracks, fleetScrubT]);
+    }), [devices, fleetHistory.rowsByDevice, fleetTracks, fleetScrubT, fleetLive, fleetForecasts]);
     const fleetFitBalloons = useMemo<V2Balloon[]>(() => devices.flatMap(device => {
+        const projected = projectedFleetPosition(fleetTracks[device.id] ?? [], fleetForecasts[device.id], fleetLive[device.id] ?? null);
+        if (projected) return [{ id: device.id, ...projected, altitude_m: null }];
         const position = mappedPosition(fleetHistory.rowsByDevice[device.id] ?? [], null);
         return position ? [{ id: device.id, ...position }] : [];
-    }), [devices, fleetHistory.rowsByDevice]);
+    }), [devices, fleetHistory.rowsByDevice, fleetTracks, fleetLive, fleetForecasts]);
+    /* The line from each such balloon's last fix to its marker. Only that far:
+     * the forecast beyond "now" stays on the balloon's own page. */
+    const fleetEstimates = useMemo(() => Object.entries(fleetForecasts).flatMap(([id, legs]) => {
+        const last = fleetTracks[id]?.at(-1);
+        const untilT = fleetScrubT ?? fleetLive[id] ?? null;
+        const leg = last && untilT !== null ? estimatedLeg(last, legs, untilT) : null;
+        return leg ? [{ id, ...leg }] : [];
+    }), [fleetForecasts, fleetTracks, fleetScrubT, fleetLive]);
+
+    /* The fleet scrubber covers only flying time: each balloon on show from its
+     * detected launch (bench soak doesn't count) to its last packet or estimated
+     * "now", with the months between flights left out. */
+    const fleetLaunches = useMemo(() => new Map(devices.map(device => {
+        const rows = fleetHistory.rowsByDevice[device.id] ?? [];
+        return [device.id, rows.length ? detectLaunchT(rows, device.launchedAt) : null];
+    })), [devices, fleetHistory.rowsByDevice]);
+    const fleetFlown = useMemo(() => {
+        const shown = new Set(shownKey.split('\n'));
+        return devices.filter(device => shown.has(device.id) && fleetLaunches.get(device.id) != null);
+    }, [devices, shownKey, fleetLaunches]);
+    const fleetSpans = useMemo(() => flightSpans(fleetFlown.map(device => ({
+        launchT: fleetLaunches.get(device.id) ?? null,
+        rows: fleetHistory.rowsByDevice[device.id] ?? [],
+        liveUntil: fleetLive[device.id],
+    }))), [fleetFlown, fleetLaunches, fleetHistory.rowsByDevice, fleetLive]);
+    const fleetTimelineHistories = useMemo(() => fleetFlown.length
+        ? fleetFlown.map(device => fleetHistory.rowsByDevice[device.id] ?? [])
+        : fleetHistories, [fleetFlown, fleetHistory.rowsByDevice, fleetHistories]);
     const shownFleet = portalPreview ? fleetBalloons.filter(balloon => previewIds.has(balloon.id)) : fleetBalloons.filter(balloon => filteredIds.has(balloon.id));
     const plannedCount = filteredDevices.filter(device => isPlannedBalloon(device.status)).length;
     const activity = fleetActivity(filteredDevices.filter(device => !isPlannedBalloon(device.status)), fleetHistory.rowsByDevice, Date.now());
@@ -407,6 +448,7 @@ export default function MissionControlScreen() {
                         fleetDevices={portalPreview ? devices : filteredDevices}
                         fleetHistory={fleetHistory.rowsByDevice}
                         fleetTracks={fleetTracks}
+                        fleetEstimates={fleetEstimates}
                         fleetReady={!registryLoading && !fleetHistory.loading}
                         fleetCaption={fleetCaption}
                         onSelectBalloon={handleSelectDevice}
@@ -424,13 +466,15 @@ export default function MissionControlScreen() {
                     />}
                     {!footerOnly && <div className="fleet-timeline">
                         <Timeline
-                            histories={isFleet ? fleetHistories : [visibleRows]}
+                            histories={isFleet ? fleetTimelineHistories : [visibleRows]}
+                            spans={isFleet && fleetSpans.length ? fleetSpans : null}
+                            estimated={isFleet}
                             scrubT={isFleet ? fleetScrubT : scrubT}
                             onScrub={isFleet ? setFleetScrubT : pickTime}
-                            archived={isFleet ? fleetRecorded : archived}
+                            archived={isFleet ? fleetArchived : archived}
                             onScrubbingChange={setIsScrubbing}
                             futureEndT={isFleet ? null : forecast.endT}
-                            originT={isFleet ? null : liveEstimateT}
+                            originT={isFleet ? fleetLiveT : liveT}
                             floating
                         />
                     </div>}
@@ -759,7 +803,7 @@ function ChartRow({ title, unit, color, rows, getY, scrubT, value, min, max }: {
  * Map column — coverage + 3-state flight path + forecast.
  * ────────────────────────────────────────────────────────────── */
 function MapColumn({
-    isFleet, fleetBalloons, fleetFitBalloons, fleetDevices, fleetHistory, fleetTracks, fleetReady, fleetCaption, onSelectBalloon,
+    isFleet, fleetBalloons, fleetFitBalloons, fleetDevices, fleetHistory, fleetTracks, fleetEstimates, fleetReady, fleetCaption, onSelectBalloon,
     visibleRows,
     scrubRow,
     selectedDevice,
@@ -778,6 +822,8 @@ function MapColumn({
     fleetDevices: DeviceSummary[];
     fleetHistory: Record<string, TelemetryRow[]>;
     fleetTracks: Record<string, V2FlightPoint[]>;
+    /** Each GPS-dark balloon's estimated path from its last fix to its marker. */
+    fleetEstimates: Array<{ id: string; drift: Array<[number, number]>; ahead: Array<[number, number]> }>;
     fleetReady: boolean;
     fleetCaption: string;
     onSelectBalloon: (id: string) => void;
@@ -981,7 +1027,8 @@ function MapColumn({
                 showDayNight={!portalPreview && showDayNight}
                 showFlightPaths={!portalPreview && !isFleet && showFlightTrail}
                 showFlightTails={!portalPreview && isFleet && showFlightTrail}
-                showProjectedPath={!portalPreview && !isFleet && showProjectedPath}
+                showProjectedPath={!portalPreview && showProjectedPath}
+                fleetEstimates={isFleet ? fleetEstimates.filter(leg => fleetDevices.some(device => device.id === leg.id)) : []}
                 balloons={isFleet ? fleetBalloons : balloon ? [balloon] : []}
                 fleetFitBalloons={portalPreview ? fleetFitBalloons.filter(point => fleetBalloons.some(balloon => balloon.id === point.id)) : isFleet ? fleetFitBalloons : undefined}
                 fleetPaths={fleetPaths}
@@ -1017,6 +1064,7 @@ function MapColumn({
                 hasForecast={liveForecast.path.length >= 2 || liveForecast.ensemble.length > 0 || forecast.ellipses.length > 0 || (staleLine?.length ?? 0) >= 2 || forecast.divergence != null}
                 hasHindcast={hindcastPath.length >= 2 || trackPoints.length >= 2}
                 hasEstimated={hindcastSegments.some(s => s.estimated)}
+                hasEstimate={isFleet && fleetEstimates.length > 0}
                 hasGateways={flightHasGateways}
                 colorScheme={colorScheme}
             />

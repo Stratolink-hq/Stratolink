@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react';
 import { forecastRequests, type ForecastView } from '@/lib/telemetry/forecastRequests';
 import { cleanReconstructedTrack } from '@/lib/telemetry/reconstructedTrack';
+import { forecastTimes } from '@/lib/telemetry/forecastTrack';
 
 /** [lon, lat] pairs, forecast origin → predicted endpoint. */
 export type ForecastPath = Array<[number, number]>;
@@ -144,14 +145,7 @@ export function useForecastPath(deviceId: string | null, view: Exclude<ForecastV
 
             /* Future-scrub window: path[0] sits at the forecast origin time,
              * the last point at origin + horizon hours. */
-            const rawOrigin = data?.forecast_origin?.time_utc;
-            const rawHorizon = data?.forecast_horizon_h;
-            const originMs = typeof rawOrigin === 'string' ? Date.parse(rawOrigin) : NaN;
-            const horizonH = typeof rawHorizon === 'number' || typeof rawHorizon === 'string' ? Number(rawHorizon) : NaN;
-            const originT = Number.isFinite(originMs) ? originMs : null;
-            const endT = originT != null && Number.isFinite(horizonH)
-                ? originT + horizonH * 3_600_000
-                : null;
+            const { originT, endT } = forecastTimes(data?.forecast_origin?.time_utc, data?.forecast_horizon_h);
 
             setState({
                 path,
