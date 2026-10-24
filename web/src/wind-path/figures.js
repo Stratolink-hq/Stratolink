@@ -560,31 +560,45 @@ function match(host) {
 }
 
 /* ── 6. choosing one path ──────────────────────────────────────────────────── */
-/* The candidate paths as a faint bundle; the drawn line draws in through its densest
- * part, with every path's position at that hour around its head. Loops. */
+/* The candidate paths as a faint bundle and the drawn line, their average position at
+ * each hour, drawing in. Around its head, every path's position at that hour, shaded by
+ * how far it has come compared with the rest (light behind, dark ahead): strung out
+ * along a bend by their speeds, they average to a point on its inside. Loops, slowly. */
+const BEHIND = [188, 217, 234], AHEAD = [13, 58, 92];
 async function line(host, signal) {
   const [cloud, coast] = await Promise.all([clouds(), load('coast-atlantic.json')]);
   if (signal.aborted) return;
   const p = cloud.posterior, { n, steps, hours, hoursPerStep } = p, A = p.drawn[0], B = p.drawn[steps - 1];
+  /* distance each path has traveled by every step, for ranking them at any hour */
+  const traveled = Array.from({ length: n }, (_, i) => {
+    const out = new Float64Array(steps);
+    for (let k = 1; k < steps; k++) { const q0 = p.at(i, k - 1), q1 = p.at(i, k); out[k] = out[k - 1] + km(q0[0], q0[1], q1[0], q1[1]); }
+    return out;
+  });
+  const shade = r => `rgb(${BEHIND.map((c, j) => Math.round(lerp(c, AHEAD[j], r))).join(',')})`;
   host.innerHTML = `${heading('Choosing one path', `${n} of the ${fmt(p.nTotal)} candidate paths`)}
-    <div class="chart-legend">${key('Candidate paths', BLUE)}${key('Where they are at the hour shown', BLUE, 'dot')}${key('The drawn line', RED)}</div>
+    <div class="chart-legend">${key('Candidate paths', BLUE)}<span class="chart-key"><i class="progress-key"></i>Where each path is now, behind to ahead</span>${key('The drawn line, their average position', RED)}</div>
     <div class="fleet-map-stage"></div>`;
-  const map = createMap(GAP_VIEW, 'The candidate paths across the eight-day gap as a faint bundle, with the drawn line through the densest part of it.');
+  const map = createMap(GAP_VIEW, 'The candidate paths across the eight-day gap as a faint bundle, with the drawn line, their average position at each hour. Around the line, every path’s position at that hour, shaded from behind to ahead; strung out along the arc by their speeds, they average to a point on the inside of the bend.');
   host.querySelector('.fleet-map-stage').prepend(map.canvas);
   let f = 0;
   function draw() {
     if (!map.width) return;
-    const s = Math.min(f * hours / hoursPerStep, steps - 1), k = Math.floor(s), t = s - k;
-    const d0 = p.drawn[k], d1 = p.drawn[Math.min(steps - 1, k + 1)], head = [lerp(d0[0], d1[0], t), lerp(d0[1], d1[1], t)];
+    const s = Math.min(f * hours / hoursPerStep, steps - 1), k = Math.floor(s), t = s - k, k1 = Math.min(steps - 1, k + 1);
+    const d0 = p.drawn[k], d1 = p.drawn[k1], head = [lerp(d0[0], d1[0], t), lerp(d0[1], d1[1], t)];
     map.base(coast);
-    for (let i = 0; i < n; i++) map.line(p.path(i, 0, steps - 1), { color: BLUE, width: .7, alpha: .09 });
-    if (f < 1) for (let i = 0; i < n; i++) { const q = p.at(i, s); map.dot(q[0], q[1], 1.9, BLUE, null, 1, .7); }
+    for (let i = 0; i < n; i++) map.line(p.path(i, 0, steps - 1), { color: BLUE, width: .7, alpha: .065 });
+    if (f < 1) {
+      const order = traveled.map((d, i) => [lerp(d[k], d[k1], t), i]).sort((x, y) => x[0] - y[0]);
+      const size = clamp(map.width / 330, 1.6, 2.6);   // smaller on a phone's smaller map
+      order.forEach(([, i], r) => { const q = p.at(i, s); map.dot(q[0], q[1], size, shade(r / (n - 1)), CREAM, .5, .95); });
+    }
     map.line([...p.drawn.slice(0, k + 1), head], { color: RED, width: 2.4 });
-    if (f < 1) map.dot(head[0], head[1], 4.5, RED, CREAM, 1.4);
+    if (f < 1) map.dot(head[0], head[1], 5, RED, CREAM, 1.6);
     map.dot(A[0], A[1], 5, CREAM, INK, 1.6); map.dot(B[0], B[1], 5, CREAM, INK, 1.6);
     haloLabel(map, A[0], A[1], 'May 19', 9, 14); haloLabel(map, B[0], B[1], 'May 28', -9, -10);
   }
-  f = loop(host, signal, { duration: 7000, hold: 2500 }, value => { f = value; draw(); });
+  f = loop(host, signal, { duration: 14000, hold: 2500 }, value => { f = value; draw(); });
   observeChartSize(host, () => { map.resize(contentWidth(host)); draw(); }, signal);
 }
 

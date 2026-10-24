@@ -37,3 +37,5 @@
   .post-figure.wide > .interactive-chart { padding: 16px 8px 10px; border-radius: 0; }
   .post-figure.wide:has(> .interactive-chart) > figcaption { padding: 0 20px; }
 }
+
+.chart-key .progress-key { width: 22px; height: 9px; border-radius: 5px; background: linear-gradient(90deg, rgb(188,217,234), #2f86b8, rgb(13,58,92)); }
