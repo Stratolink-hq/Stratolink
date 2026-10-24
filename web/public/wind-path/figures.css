@@ -1,0 +1,30 @@
+/* Figure chrome specific to "Drawing the path between packets"; the shared chart
+   styles come from /payload-dev-log/article.css. */
+.chart-key .key-dot { width: 9px; height: 9px; border-radius: 50%; }
+.chart-key .key-diamond { width: 9px; height: 9px; transform: rotate(45deg); border-radius: 1px; }
+.spread-chart { display: block; max-width: 100%; margin-top: 14px; }
+.fleet-map-stage .fleet-map { display: block; }
+.pipeline { display: block; width: 100%; height: auto; }
+
+.tube-inset { display: flex; flex-wrap: wrap; gap: 16px; margin: 14px 0 4px; }
+.tube-inset figure { margin: 0; }
+.tube-inset canvas { display: block; border-radius: 6px; }
+.tube-inset figcaption { margin-top: 6px; font-size: 12px; color: #62675e; }
+/* The figures are as tall as their content at any width; no reserved height. */
+.interactive-chart[data-chart=replay], .interactive-chart[data-chart=plain], .interactive-chart[data-chart=spread],
+.interactive-chart[data-chart=arrive], .interactive-chart[data-chart=meeting], .interactive-chart[data-chart=match],
+.interactive-chart[data-chart=line], .interactive-chart[data-chart=tube], .interactive-chart[data-chart=resolution],
+.interactive-chart[data-chart=forecast] { min-height: 0; }
+
+.match-panels { display: flex; flex-wrap: wrap; gap: 18px; padding: 0 4px 4px; }
+.match-panel { flex: 1 1 200px; margin: 0; }
+.match-panel svg { display: block; width: 100%; height: auto; }
+.match-panel figcaption { display: grid; gap: 3px; margin-top: 8px; font-size: 12px; color: #62675e; }
+.match-panel figcaption b { color: #292927; font-size: 13px; font-weight: 600; }
+.match-weight { display: block; height: 6px; margin-top: 5px; border-radius: 3px; background: #e3e4dd; overflow: hidden; }
+.match-weight i { display: block; height: 100%; background: #292927; }
+@media (max-width: 600px) {
+  .match-panels { gap: 14px; }
+  .match-panel { flex-basis: 100%; display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; align-items: center; }
+  .match-panel figcaption { margin-top: 0; }
+}
