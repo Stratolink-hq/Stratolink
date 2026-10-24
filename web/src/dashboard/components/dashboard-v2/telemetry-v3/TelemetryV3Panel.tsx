@@ -419,7 +419,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
 
 
             {flight.times.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px var(--telemetry-gutter, 18px) 20px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px var(--telemetry-gutter, 18px) 8px', flexShrink: 0 }}>
                     <span className="mono" style={{ fontSize: 9.5, color: 'var(--t-text-4)' }}>
                         {stamp(flight.times[0])}
                     </span>
