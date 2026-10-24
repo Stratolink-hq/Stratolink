@@ -606,7 +606,9 @@ async function line(host, signal) {
 async function forecast(host, signal) {
   const [f, buffer, coast] = await Promise.all([load('forecast.json'), load('forecast.bin'), load('/assets/payload-dev-log/coastlines.json')]);
   if (signal.aborted) return;
-  const pos = new Int16Array(buffer), { members, steps, hours, spreadKm, median, thresholdKm } = f, total = hours[steps - 1], stepH = hours[1] - hours[0];
+  const pos = new Int16Array(buffer), { members, steps, hours, spreadKm, median, thresholdKm } = f,
+    /* GEFS blue, AIGEFS red: the forward/backward colors of the other figures */
+    colorOf = m => (f.models?.[m] === 'aigefs' ? RED : BLUE), total = hours[steps - 1], stepH = hours[1] - hours[0];
   const at = (m, s) => {
     const a = Math.floor(s), b = Math.min(steps - 1, a + 1), t = s - a, ia = (m * steps + a) * 2, ib = (m * steps + b) * 2;
     let dl = pos[ib + 1] - pos[ia + 1]; if (dl > 18000) dl -= 36000; if (dl < -18000) dl += 36000;
@@ -614,7 +616,7 @@ async function forecast(host, signal) {
   };
   const spreadAt = s => { const a = Math.floor(s), b = Math.min(steps - 1, a + 1); return spreadKm[a] + (spreadKm[b] - spreadKm[a]) * (s - a); };
   host.innerHTML = `${heading('Where it goes next', `${members} members: ${f.gefs} GEFS, ${f.aigefs} AIGEFS`)}
-    <div class="chart-legend">${key('Ensemble members', BLUE)}${key('Median path, the drawn forecast', INK)}${key('Forecast ends', RED, 'diamond')}</div>
+    <div class="chart-legend">${key(`${f.gefs} GEFS members`, BLUE)}${key(`${f.aigefs} AIGEFS members`, RED)}${key('Median path, the drawn forecast', INK)}${key('Forecast ends', INK, 'diamond')}</div>
     <div class="fleet-map-stage"></div>
     <div class="chart-stage"><svg class="spread-chart" role="img" aria-label="Ensemble spread against forecast day, with the 2,000 km stopping threshold"></svg></div>`;
   const map = createMap(WORLD, 'Sixty-two ensemble trajectories from the last fix in Spain eastward around the world, and their spread against the 2,000 km threshold where the forecast stops.');
@@ -629,11 +631,11 @@ async function forecast(host, signal) {
     for (const v of [0, 1000, 2000]) svg.append(el('line', { x1: L, x2: w - Rm, y1: sy(v), y2: sy(v), class: 'grid-line' }), el('text', { x: L - 7, y: sy(v) + 4, 'text-anchor': 'end', class: 'tick' }, v ? `${fmt(v / 1000, 0)}k km` : '0'));
     for (let d = 0; d <= total / 24; d += 2) svg.append(el('text', { x: sx(d * 24), y: ht - 10, 'text-anchor': 'middle', class: 'tick' }, `day ${d}`));
     svg.append(el('text', { x: L, y: 10, class: 'axis-label' }, 'Spread around the median'));
-    svg.append(el('line', { x1: L, x2: w - Rm, y1: sy(thresholdKm), y2: sy(thresholdKm), stroke: RED, 'stroke-dasharray': '4 4' }));
-    svg.append(el('text', { x: w - Rm, y: sy(thresholdKm) - 6, 'text-anchor': 'end', class: 'tick', fill: RED }, 'forecast stops'));
-    svg.append(el('path', { d: spreadKm.map((v, k) => `${k ? 'L' : 'M'}${sx(hours[k])},${sy(v)}`).join(' '), fill: 'none', stroke: BLUE, 'stroke-width': 2.2 }));
+    svg.append(el('line', { x1: L, x2: w - Rm, y1: sy(thresholdKm), y2: sy(thresholdKm), stroke: INK, 'stroke-dasharray': '4 4' }));
+    svg.append(el('text', { x: w - Rm, y: sy(thresholdKm) - 6, 'text-anchor': 'end', class: 'tick', fill: INK }, 'forecast stops'));
+    svg.append(el('path', { d: spreadKm.map((v, k) => `${k ? 'L' : 'M'}${sx(hours[k])},${sy(v)}`).join(' '), fill: 'none', stroke: GRAY, 'stroke-width': 2.2 }));
     svg.append(el('line', { x1: sx(hour), x2: sx(hour), y1: T, y2: ht - B, stroke: '#29292766', 'stroke-dasharray': '3 4' }));
-    svg.append(el('circle', { cx: sx(hour), cy: sy(spread), r: 4, fill: BLUE, stroke: CREAM, 'stroke-width': 2 }));
+    svg.append(el('circle', { cx: sx(hour), cy: sy(spread), r: 4, fill: GRAY, stroke: CREAM, 'stroke-width': 2 }));
   }
   function draw() {
     if (!map.width) return;
@@ -642,9 +644,9 @@ async function forecast(host, signal) {
     const { ctx } = map;
     for (let m = 0; m < members; m++) {
       const pts = []; for (let k = 0; k <= Math.floor(s); k++) pts.push(at(m, k)); pts.push(at(m, s));
-      map.line(pts, { color: BLUE, width: .8, alpha: .32 });
+      map.line(pts, { color: colorOf(m), width: .9, alpha: .4 });
     }
-    for (let m = 0; m < members; m++) { const q = at(m, s); map.dot(q[0], q[1], 1.6, BLUE, null, 1, .8); }
+    for (let m = 0; m < members; m++) { const q = at(m, s); map.dot(q[0], q[1], 1.8, colorOf(m), null, 1, .9); }
     const med = median.slice(0, Math.floor(s) + 1); const ms = median[Math.min(steps - 1, Math.ceil(s))], mf = median[Math.floor(s)];
     med.push([mf[0] + (ms[0] - mf[0]) * (s - Math.floor(s)), mf[1] + (ms[1] - mf[1]) * (s - Math.floor(s))]);
     map.line(med, { color: INK, width: 2 });
@@ -652,8 +654,8 @@ async function forecast(host, signal) {
     haloLabel(map, f.lastFix[0], f.lastFix[1], 'Last fix, May 29', 9, 18);
     if (done) {
       const [x, y] = map.point(f.divergence.lat, f.divergence.lon);
-      ctx.fillStyle = RED; ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.fill();
-      map.label(f.divergence.lat, f.divergence.lon, `forecast ends: spread ${fmt(spreadKm[steps - 1])} km`, -11, -10, RED);
+      ctx.fillStyle = INK; ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.fill();
+      haloLabel(map, f.divergence.lat, f.divergence.lon, `forecast ends: spread ${fmt(spreadKm[steps - 1])} km`, -11, -10);
     }
     drawChart(hour, spreadAt(s));
   }
