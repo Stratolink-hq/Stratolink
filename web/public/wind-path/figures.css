@@ -12,4 +12,4 @@
 .tube-inset canvas { display: block; border-radius: 6px; }
 .tube-inset figcaption { margin-top: 6px; font-size: 12px; color: #62675e; }
 /* The map-only figures are as tall as their map at any width; no reserved height. */
-.interactive-chart[data-chart=replay], .interactive-chart[data-chart=plain] { min-height: 0; }
+.interactive-chart[data-chart=replay], .interactive-chart[data-chart=plain], .interactive-chart[data-chart=spread] { min-height: 0; }
