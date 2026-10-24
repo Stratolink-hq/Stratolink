@@ -1,10 +1,11 @@
+import { balloonColor } from '../FleetOverview';
+import BalloonActions from '../BalloonActions';
 import { useEffect, useMemo, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowUp,
     faBolt,
     faCircle,
-    faClockRotateLeft,
     faMoon,
     faSolarPanel,
     faSun,
@@ -16,7 +17,7 @@ import {
     buildFlightSeries,
     computePayloadAttitude,
 } from '@/lib/telemetry/flightSeries';
-import { relTime, stamp, tlmFmt, tzName, type StatusLevel } from '@/lib/telemetry/telemetryV3Format';
+import { relTime, stamp, tlmFmt, type StatusLevel } from '@/lib/telemetry/telemetryV3Format';
 import { useGatewayPoints } from '@/lib/gateways/data';
 import { haversineKm } from '@/lib/gateways/range';
 import { LineTrend } from './charts';
@@ -24,24 +25,6 @@ import { Divider, DOT, Group } from './primitives';
 import { OfficialBadge, BalloonOwner } from '../BalloonIdentity';
 import { balloonName } from '@/lib/telemetry/fleetPlayback';
 import { useUnits } from '../dashboard-units';
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** "May 17, 2026 · 08:55 PDT" (viewer's local zone) — no seconds, friendlier than the raw stamp. */
-function fmtLaunchDate(ms: number): string {
-    const d = new Date(ms);
-    return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
-function fmtLaunchTime(ms: number): string {
-    const d = new Date(ms);
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(d.getHours())}:${p(d.getMinutes())} ${tzName(ms)}`;
-}
-
-function fmtLaunch(ms: number): string {
-    return `${fmtLaunchDate(ms)} - ${fmtLaunchTime(ms)}`;
-}
 
 type FlightSummary = { durationMs: number | null; distanceKm: number };
 
@@ -84,30 +67,12 @@ function LastContactValue({ lastContactT }: { lastContactT: number | null }) {
 }
 
 /** Header status — a quiet dot + label, not a button/chip. */
-function HeaderStatus({ status, label, icon = faCircle }: { status: StatusLevel; label: string; icon?: typeof faCircle }) {
+function HeaderStatus({ color, label }: { color: string; label: string }) {
     return (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <FontAwesomeIcon icon={icon} style={{ width: icon === faCircle ? 6 : 10, height: icon === faCircle ? 6 : 10, color: DOT[status], flexShrink: 0 }} aria-hidden />
+            <FontAwesomeIcon icon={faCircle} style={{ width: 5, height: 5, color, flexShrink: 0 }} aria-hidden />
             <span className="eyebrow" style={{ color: 'var(--t-text-2)', fontSize: 9.5 }}>{label}</span>
         </span>
-    );
-}
-
-/** Show the archived sample time or connection status at the chart cursor. */
-function ConnectionStatus({ connected, archived, recordedAt }: { connected: boolean; archived: boolean; recordedAt: number | null }) {
-    return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <HeaderStatus
-                status={connected ? 'nominal' : 'critical'}
-                label={connected ? archived ? 'Recorded telemetry' : 'Transmitting' : 'No connection'}
-                icon={connected && archived ? faClockRotateLeft : faCircle}
-            />
-            {connected && archived && recordedAt != null && (
-                <time dateTime={new Date(recordedAt).toISOString()} className="mono" style={{ color: 'var(--t-text-3)', fontSize: 9.5 }}>
-                    {fmtLaunch(recordedAt)}
-                </time>
-            )}
-        </div>
     );
 }
 
@@ -189,7 +154,7 @@ function TiltIcon({ deg, color }: { deg: number; color: string }) {
     );
 }
 
-export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, scrubT = null, summary, rows, isFuture = false, recordedHistory = false, variant = 'full', onPickTime, onScrubbingChange }: TelemetryV3PanelProps) {
+export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, scrubT = null, summary, rows, isFuture = false, variant = 'full', onPickTime, onScrubbingChange }: TelemetryV3PanelProps) {
     const showHeader = variant !== 'charts';
     const showBody = variant !== 'summary';
     /* The mobile summary header is tightened vertically — it's the only thing
@@ -256,36 +221,15 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
      * panel stranded users on a data-less device with no way to switch. Only
      * the chart body gives way to the note. */
     const awaiting = rows.length < 2;
-    const archived = recordedHistory || ['landed', 'recovered', 'retired', 'lost'].includes(device?.status?.toLowerCase() ?? '');
-    const registryStillFlying = recordedHistory && device?.status?.toLowerCase() === 'flying';
-    const launchLine = registryStillFlying && rows.length
-        ? { text: `Records from ${fmtLaunchDate(rows[0].t)}`, time: rows[0].t }
-        : device?.launchedAt
-            ? { text: `Launched ${rows[0]?.locationApproximate ? 'from San Francisco - ' : ''}${fmtLaunchDate(device.launchedAt)}`, time: device.launchedAt }
-            : { text: 'Awaiting launch', time: null };
 
     return (
         <>
             {showHeader && (
             <div style={{ borderBottom: compact ? undefined : '1px solid var(--t-border)', flexShrink: 0 }}>
-                <h1 className="dashboard-device-title">{device ? balloonName(device) : 'Balloon'} <OfficialBadge official={device?.official} /></h1>
-                {device && (device.official || device.ownerGithub) && <div className="detail-owner"><BalloonOwner device={device} /></div>}
-                <div style={{ padding: compact ? '8px var(--telemetry-gutter, 18px) 0' : '12px var(--telemetry-gutter, 18px) 0' }}>
-                    {/* One line: when it doesn't fit, the time wraps onto a clipped second line, then the date ellipsizes. */}
-                    <div className="detail-status-line">
-                        <span className="detail-status-main">
-                            {device?.status && (
-                                <>
-                                    <HeaderStatus status="nominal" label={registryStillFlying ? 'Missing' : String(device.status)} />
-                                    <span style={{ color: 'var(--t-text-4)', fontSize: 10 }}>-</span>
-                                </>
-                            )}
-                            <span className="mono detail-status-text">
-                                {launchLine.text}
-                            </span>
-                        </span>
-                        {launchLine.time != null && <span className="mono detail-status-time">{` - ${fmtLaunchTime(launchLine.time)}`}</span>}
-                    </div>
+                <div className="dashboard-device-heading"><h1 className="dashboard-device-title">{device ? balloonName(device) : 'Balloon'} <OfficialBadge official={device?.official} /></h1>{device && <BalloonActions deviceId={device.id} />}</div>
+                <div className="balloon-byline detail-byline">
+                    {device && <BalloonOwner device={device} />}
+                    {device?.status && <HeaderStatus color={balloonColor(device.id)} label={String(device.status)} />}
                 </div>
                 <div
                     style={{
@@ -299,9 +243,7 @@ export default function TelemetryV3Panel({ device, devices, onSelect, scrubRow, 
                     <Metric label="Total dist" value={tlmFmt.int(u.distance(summary.distanceKm))} unit={u.labels.distance} />
                     <Metric label="Last contact" value={<LastContactValue lastContactT={device?.lastContactT ?? null} />} />
                 </div>
-                <div style={{ padding: compact ? '0 var(--telemetry-gutter, 18px) 12px' : '0 var(--telemetry-gutter, 18px) 16px' }}>
-                    <ConnectionStatus connected={!isFuture && !awaiting} archived={archived} recordedAt={scrubRow?.t ?? null} />
-                </div>
+
             </div>
             )}
 

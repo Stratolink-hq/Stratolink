@@ -1,3 +1,4 @@
+import ManagedBalloons from './ManagedBalloons';
 /**
  * Mission Control — the single unified flight page.
  *
@@ -101,6 +102,7 @@ export default function MissionControlScreen() {
         devices: registryDevices, selectedId, setSelectedId, rows, loading: registryLoading, refetch,
     } = useTelemetry({ initialSelectedId });
     const community = useCommunity();
+    const managing = community.panel === 'manage' && Boolean(community.account);
     useEffect(() => { if (community.focusDevice) setSelectedId(community.focusDevice); }, [community.focusDevice, setSelectedId]);
     const portalPreview = globeStage === 'footer' || globeStage === 'entering';
     const fleetHistory = useFleetHistory(registryDevices.filter(device => device.connectionStatus !== 'pending'), selectedId === null, { positionsOnly: portalPreview });
@@ -116,7 +118,7 @@ export default function MissionControlScreen() {
         catch { /* Browser storage may be disabled. */ }
     }, [filters]);
     useEffect(() => { if (community.revision) refetch(); }, [community.revision, refetch]);
-    const filteredDevices = useMemo(() => filterFleet(devices, { ...filters, mine: filters.mine && Boolean(community.user) }, community.user?.id ?? null, Date.now()), [devices,filters,community.user?.id]);
+    const filteredDevices = useMemo(() => managing ? devices.filter(device => community.balloons.some(balloon => balloon.id === device.id)) : filterFleet(devices, { ...filters, mine: filters.mine && Boolean(community.user) }, community.user?.id ?? null, Date.now()), [devices,filters,community.user?.id,managing,community.balloons]);
     const filteredIds = new Set(filteredDevices.map(device => device.id));
     const fleetReconstruction = useFleetReconstruction(selectedId === null && !portalPreview && showFlightTrail
         ? filteredDevices.filter(device => !isPlannedBalloon(device.status) && (fleetHistory.rowsByDevice[device.id]?.length ?? 0) > 1).map(device => device.id)
@@ -346,6 +348,7 @@ export default function MissionControlScreen() {
     }, []);
 
     const handleSelectDevice = useCallback((id: string, animate = true) => {
+        community.setPanel(null);
         transitionPanel(id, () => {
             setSelectedId(id);
             setScrubT(null);
@@ -353,9 +356,10 @@ export default function MissionControlScreen() {
             window.history.replaceState(window.history.state, '', `/dashboard?device=${encodeURIComponent(id)}`);
             notifyGlobeParent('route', { path: `/dashboard?device=${encodeURIComponent(id)}` });
         }, animate);
-    }, [setSelectedId, transitionPanel]);
+    }, [setSelectedId, transitionPanel, community.setPanel]);
 
     function showFleet(animate = true) {
+        community.setPanel(null);
         transitionPanel(selectedId, () => {
             setSelectedId(null);
             setScrubT(null);
@@ -377,11 +381,11 @@ export default function MissionControlScreen() {
                 <div className="safari-edge safari-edge-top" aria-hidden="true" />
                 <div className="safari-edge safari-edge-bottom" aria-hidden="true" />
             </>}
-            <main className="fleet-layout" data-detail={!isFleet} data-loading={registryLoading}>
+            <main className="fleet-layout" data-detail={!isFleet} data-managing={managing} data-loading={registryLoading}>
                 {!footerOnly && <aside className="tlm-panel dashboard-panel fleet-panel">
-                    <DashboardHeader onBack={isFleet ? undefined : showFleet} />
+                    <DashboardHeader onBack={isFleet && !managing ? undefined : showFleet} />
                     <CommunityPanel />
-                    {isFleet ? (
+                    {managing ? <ManagedBalloons onView={handleSelectDevice} /> : isFleet ? (
                         <><FleetFilters value={filters} onChange={setFilters} signedIn={Boolean(community.account)} count={filteredDevices.length} />
                         <FleetOverview devices={filteredDevices} {...fleetHistory} loading={registryLoading || fleetHistory.loading} scrubT={fleetScrubT} now={nowMs ?? Date.now()} onSelect={handleSelectDevice} transitionId={transitionId} /></>
                     ) : (
@@ -431,7 +435,7 @@ export default function MissionControlScreen() {
                         />
                     </div>}
                 </div>
-                {isMobile && !isFleet && <>
+                {isMobile && !isFleet && !managing && <>
                     <div style={{ height: DRAWER_HANDLE_H, flexShrink: 0 }} />
                     <ChartsDrawer open={chartsOpen} onToggle={() => setChartsOpen(value => !value)}>
                         <div className="tlm-panel tlm-scroll" style={{ minHeight: 0, overflowY: 'auto' }}>

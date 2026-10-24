@@ -29,7 +29,7 @@ interface DeviceSummary {
     latestFix: { lat: number; lon: number; alt: number | null; t: number } | null;
 }
 
-const FULL_TELEMETRY_COLUMNS =
+export const FULL_TELEMETRY_COLUMNS =
     'time, lat, lon, altitude_m, battery_voltage, solar_voltage, temperature, pressure, ' +
     'rssi, snr, gps_speed, gps_heading, gps_satellites, mems_accel_x, mems_accel_y, mems_accel_z, ' +
     'velocity_x, velocity_y, ' +
