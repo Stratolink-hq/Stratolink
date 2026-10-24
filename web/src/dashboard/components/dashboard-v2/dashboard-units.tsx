@@ -9,9 +9,9 @@ const STORAGE_KEY = 'stratolink-dashboard-units';
 const FEET_PER_METER = 3.280839895;
 const MILES_PER_KM = 0.621371192;
 
-export const UNIT_LABELS: Record<UnitSystem, { altitude: string; distance: string; temperature: string }> = {
-    metric: { altitude: 'm', distance: 'km', temperature: '°C' },
-    imperial: { altitude: 'ft', distance: 'mi', temperature: '°F' },
+export const UNIT_LABELS: Record<UnitSystem, { altitude: string; distance: string; temperature: string; speed: string }> = {
+    metric: { altitude: 'm', distance: 'km', temperature: '°C', speed: 'km/h' },
+    imperial: { altitude: 'ft', distance: 'mi', temperature: '°F', speed: 'mph' },
 };
 
 function readStoredUnits(): UnitSystem {
@@ -70,6 +70,8 @@ export function useUnits() {
             distance: convert(km => imperial ? km * MILES_PER_KM : km),
             /** °C → °C or °F */
             temperature: convert(c => imperial ? c * 9 / 5 + 32 : c),
+            /** km/h → km/h or mph */
+            speed: convert(kmh => imperial ? kmh * MILES_PER_KM : kmh),
         };
     }, [units, setUnits]);
 }
