@@ -1,9 +1,9 @@
-/* Interactive figures for "Drawing the path between packets". Same conventions as the
- * payload dev log's charts: a chart card with a heading, canvas maps on the muted
- * paper with the wind drawn across them, range controls with live outputs, a readout
- * line, keyboard access, and animations that pause off-screen or under
- * prefers-reduced-motion. Data comes from the bundle in /assets/wind-path, built by
- * scripts/blog/wind_path_figure_data.py and wind_path_background_winds.py. */
+/* Figures for "Drawing the path between packets". Same chrome as the payload dev log's
+ * charts (a card with a heading and a legend, canvas maps on the muted paper with the
+ * wind drawn across them), but no controls: each figure plays a short animation on a
+ * loop while it is on screen, and shows its finished frame under prefers-reduced-motion.
+ * Data comes from the bundle in /assets/wind-path, built by scripts/blog/
+ * wind_path_figure_data.py, wind_path_forecast_only.py and wind_path_background_winds.py. */
 import { colors, heatColor, observeChartSize } from '../payload-dev-log/charts.js';
 
 const ASSETS = '/assets/wind-path';
@@ -13,10 +13,6 @@ const rad = Math.PI / 180, R = 6371;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const fmt = (n, p = 0) => Number(n).toLocaleString('en-US', { maximumFractionDigits: p });
-const utc = ms => new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }) + ' UTC';
-const place = (lat, lon) => `${Math.abs(lat).toFixed(1)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? 'E' : 'W'}`;
-const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-const toward = (u, v) => COMPASS[Math.round(((Math.atan2(u, v) / rad + 360) % 360) / 22.5) % 16];
 function km(lat1, lon1, lat2, lon2) {
   const a = Math.sin((lat2 - lat1) * rad / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lon2 - lon1) * rad / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
@@ -159,48 +155,10 @@ function drawCloud(map, g, s, { color = BLUE, tail = true, alpha = 1 } = {}) {
 }
 
 /* ── shared chrome ──────────────────────────────────────────────────────────── */
-const heading = (title, subtitle, play = true) => `<div class="chart-heading fleet-heading">${title}<div class="fleet-heading-controls"><span>${subtitle}</span>${play ? '<button type="button" class="fleet-play" data-play aria-pressed="false">Play</button>' : ''}</div></div>`;
+const heading = (title, subtitle) => `<div class="chart-heading fleet-heading">${title}<div class="fleet-heading-controls"><span>${subtitle}</span></div></div>`;
 const key = (text, color, shape = 'bar') => `<span class="chart-key"><i class="key-${shape}" style="background:${color}"></i>${text}</span>`;
 const windKey = () => `<span class="chart-key"><i class="spectrum-key"></i>Wind, slow to fast</span>`;
-const slider = (label, max, step, aria, value = 0) => `<div class="fleet-controls"><label class="fleet-time">${label} <output>${value}</output><input type="range" min="0" max="${max}" value="${value}" step="${step}" aria-label="${aria}"></label></div>`;
-const footer = source => `<div class="fleet-map-footer"><span class="fleet-date"></span><span class="fleet-source">${source}</span></div>`;
 
-/* Play/pause loop that only runs while the figure is on screen and the page visible;
- * autoplays unless the reader prefers reduced motion. `advance(dt)` moves the state. */
-function player(host, signal, advance) {
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const button = host.querySelector('[data-play]');
-  let playing = false, visible = false, raf = 0, last = 0;
-  function tick(t) { raf = 0; if (!playing || !visible || document.hidden) return; if (last) advance(Math.min(t - last, 100)); last = t; raf = requestAnimationFrame(tick); }
-  function update() {
-    last = 0;
-    if (playing && visible && !document.hidden && !raf) raf = requestAnimationFrame(tick);
-    if (!playing && raf) { cancelAnimationFrame(raf); raf = 0; }
-    if (button) { button.textContent = playing ? 'Pause' : 'Play'; button.setAttribute('aria-pressed', String(playing)); }
-  }
-  const observer = new IntersectionObserver(entries => { visible = entries[0].isIntersecting; if (!visible && raf) { cancelAnimationFrame(raf); raf = 0; } update(); }, { threshold: .1 });
-  observer.observe(host);
-  document.addEventListener('visibilitychange', update, { signal });
-  reduced.addEventListener('change', () => { if (reduced.matches) { playing = false; update(); } }, { signal });
-  signal.addEventListener('abort', () => { observer.disconnect(); cancelAnimationFrame(raf); }, { once: true });
-  const api = { get playing() { return playing; }, set(value) { playing = value; update(); }, toggle() { playing = !playing; update(); } };
-  if (button) button.onclick = () => api.toggle();
-  api.set(!reduced.matches);
-  return api;
-}
-
-/* A range input that pauses the player while it is dragged and resumes afterwards. */
-function bindSlider(input, play, onInput) {
-  let resume = false;
-  input.oninput = () => { if (play.playing) { resume = true; play.set(false); } onInput(+input.value); };
-  input.onchange = () => { if (resume) play.set(true); resume = false; };
-}
-function keys(canvas, play, step) {
-  canvas.onkeydown = event => {
-    if (event.key === ' ') { event.preventDefault(); play.toggle(); }
-    else if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); play.set(false); step(event.key === 'ArrowRight' ? 1 : -1); }
-  };
-}
 /* Draw-in-and-hold animation for the figures without controls: calls frame(f) with f
  * going 0 → 1 over `duration` ms, holds f = 1 for `hold` ms, and starts again. Runs only
  * while the figure is on screen and the page visible, restarts when it scrolls back into
@@ -242,35 +200,6 @@ function sizeCanvas(canvas, ctx, width, height) {
   canvas.width = width * dpr; canvas.height = height * dpr; canvas.style.width = `${width}px`; canvas.style.height = `${height}px`; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-/* The flight's long gaps (over six hours) from the fixes, in minutes since launch. */
-function longGaps(fixes) {
-  const gaps = [];
-  for (let i = 1; i < fixes.length; i++) if (fixes[i][0] - fixes[i - 1][0] >= 360) gaps.push([fixes[i - 1][0], fixes[i][0]]);
-  return gaps;
-}
-/* The track split into the stretches between packets (ink) and the long gaps (red),
- * each as its minutes-since-launch and its [lat, lon] points. */
-function trackSegments(track, gaps) {
-  const segments = []; let current;
-  for (const [t, lat, lon] of track) {
-    const dark = gaps.some(([a, b]) => t > a && t < b);
-    if (!current || current.dark !== dark) {
-      current = { dark, times: current ? [current.times.at(-1)] : [], pts: current ? [current.pts.at(-1)] : [] };
-      segments.push(current);
-    }
-    current.times.push(t); current.pts.push([lat, lon]);
-  }
-  return segments;
-}
-/* Draw the track up to `minutes` since launch. */
-function drawTrack(map, segments, minutes) {
-  for (const seg of segments) {
-    const n = seg.times.findIndex(t => t > minutes);
-    if (n === 0) continue;
-    map.line(seg.pts, { color: seg.dark ? RED : INK, width: seg.dark ? 1.8 : 1.4, alpha: seg.dark ? .85 : 1, end: n < 0 ? undefined : n });
-  }
-}
-
 /* ── 1. the fixes, and the path between them ───────────────────────────────── */
 /* The fixes are drawn from the start; the reconstructed path draws itself in through
  * them, in flight time, holds, and starts again. */
@@ -279,7 +208,7 @@ async function replay(host, signal) {
   if (signal.aborted) return;
   const fixes = flight.fixes.filter(f => f[3]), track = flight.track, end = track.at(-1)[0];
   const first = fixes[0], last = fixes.at(-1);
-  host.innerHTML = `${heading('Stratolink 3', 'May 17 to 29, 2026', false)}
+  host.innerHTML = `${heading('Stratolink 3', 'May 17 to 29, 2026')}
     <div class="chart-legend">${key('GPS fix', INK, 'dot')}${key('Reconstructed path', RED)}</div>
     <div class="fleet-map-stage"></div>`;
   const map = createMap(FLIGHT_VIEW, `Stratolink 3’s flight from San Francisco to Spain: the ${fixes.length} GPS fixes received, with a long stretch over the Atlantic that has none, and the path the dashboard reconstructs through them.`);
@@ -312,7 +241,7 @@ async function tube(host, signal) {
   /* The filters' own clouds (every 3 h): the forward one from the fix before a
    * long gap, the backward one from the fix after it. The box is sized for them. */
   const filterAt = (t, dir) => { let best = null; for (const sn of fmeta.snaps) if (sn.dir === dir && Math.abs(sn.t - t) <= 1.6 * 3600000 && (!best || Math.abs(sn.t - t) < Math.abs(best.t - t))) best = sn; return best; };
-  const fine = new Int8Array(buffer), gaps = longGaps(flight.fixes), segments = trackSegments(flight.track, gaps);
+  const fine = new Int8Array(buffer), track = flight.track;
   /* Ride from launch to the last fix: the slices the reconstruction actually reads
    * (the cube also holds a lead-in slice and the pre-launch days on the ground). */
   const first = meta.slices.findIndex(b => b.pos), lastIdx = meta.slices.findLastIndex(b => b.pos);
@@ -320,16 +249,11 @@ async function tube(host, signal) {
   /* One fixed view that holds every box on the ride: nothing zooms or pans. */
   const view = ride.reduce((v, b) => ({ lat0: Math.min(v.lat0, b.lat0 - 2), lat1: Math.max(v.lat1, b.lat0 + b.h + 2), lon0: Math.min(v.lon0, b.lon0 - 2), lon1: Math.max(v.lon1, b.lon0 + b.w + 2) }), { lat0: 90, lat1: -90, lon0: 360, lon1: -360 });
   host.innerHTML = `${heading('Riding the tube', 'one box of 0.25° winds per 3-hour slice')}
-    <div class="chart-legend">${key('This slice’s box', BLUE)}${windKey()}<span class="chart-key"><i class="spectrum-key" style="opacity:.35"></i>Coarse 1.5° winds around it</span>${key('Forward particles', BLUE, 'dot')}${key('Backward particles', RED, 'dot')}${key('Bridges', INK, 'dot')}${key('Reconstructed track', INK)}</div>
-    <div class="fleet-map-stage"><output class="fleet-hover" hidden></output></div>
-    ${footer('')}
-    ${slider('Slice', last, .05, 'Reconstruction cube time slice')}
-    <output class="chart-readout"></output>`;
-  const map = createMap(view, 'The flight with the reconstruction’s wind box for each three-hour slice moving along it, the winds inside the box, and the possible positions during the gaps. Space plays, arrow keys step.');
+    <div class="chart-legend">${key('This slice’s box', BLUE)}${windKey()}<span class="chart-key"><i class="spectrum-key" style="opacity:.35"></i>Coarser 1.5° winds around it</span>${key('Forward balloons', BLUE, 'dot')}${key('Backward balloons', RED, 'dot')}${key('Joined paths', INK, 'dot')}${key('Flight path', RED)}</div>
+    <div class="fleet-map-stage"></div>`;
+  const map = createMap(view, 'The flight with the reconstruction’s wind box for each three-hour slice moving along it, the winds inside and around the box, and the simulated balloons during the gaps.');
   host.querySelector('.fleet-map-stage').prepend(map.canvas);
-  const input = host.querySelector('input'), output = host.querySelector('.fleet-time output'), read = host.querySelector('.chart-readout'), hover = host.querySelector('.fleet-hover'), date = host.querySelector('.fleet-date'), source = host.querySelector('.fleet-source');
-  let at = 0, shown = [], coarseShown = [];
-  const gapHours = t => { const m = (t - flight.t0) / 60000; const g = gaps.find(([a, b]) => m >= a && m <= b); return g ? (g[1] - g[0]) / 60 : 0; };
+  let at = 0;
   /* The winds of one slice, thinned to at least 1.25° and ~8 px apart so small
    * and large boxes, and phone and desktop widths, read alike (the coarse field
    * around the box is drawn sparser and paler). */
@@ -372,7 +296,6 @@ async function tube(host, signal) {
       if (al <= 0) continue;
       for (const q of coarseArrows(sl)) if (map.inView(q.lat, q.lon) && !inBox(box, q.lat, q.lon)) map.arrow(q.lat, q.lon, q.u, q.v, { alpha: .3 * al, width: .8, scale: 3.4, max: 10 });
     }
-    coarseShown = coarseArrows(fadeC < .5 ? a : b);
     for (let back = 4; back >= 1; back--) { const g = ride[k - back]; if (g) map.rect(g.lat0, g.lon0, g.h, g.w, { alpha: .05 * (5 - back), width: .8 }); }
     map.rect(box.lat0, box.lon0, box.h, box.w, { alpha: .9, width: 1.5, fill: .05 });
     /* Hold each slice's winds, then fade to the next over the last 30 % of the step. */
@@ -380,8 +303,8 @@ async function tube(host, signal) {
     const arrowsA = sliceArrows(a), arrowsB = fade > 0 ? sliceArrows(b) : [];
     for (const q of arrowsA) if (inBox(box, q.lat, q.lon)) map.arrow(q.lat, q.lon, q.u, q.v, { alpha: .85 * (1 - fade), width: 1.1, scale: 3, max: 11 });
     for (const q of arrowsB) if (inBox(box, q.lat, q.lon)) map.arrow(q.lat, q.lon, q.u, q.v, { alpha: .85 * fade, width: 1.1, scale: 3, max: 11 });
-    shown = fade < .5 ? arrowsA : arrowsB;
-    drawTrack(map, segments, minutes);
+    const n = track.findIndex(q => q[0] > minutes), trail = track.slice(0, n < 0 ? track.length : n).map(([, lat, lon]) => [lat, lon]);
+    if (trail.length > 1) map.line(trail, { color: RED, width: 1.8, alpha: .9 });
     for (const [dir, color] of [[1, BLUE], [-1, RED]]) {
       const sn = filterAt(t, dir);
       if (sn) for (let i = 0; i < sn.n; i++) { const o = sn.off + i * 2; map.dot(fpos[o] / 100, fpos[o + 1] / 100, 2.2, color, null, 1, .6); }
@@ -391,30 +314,9 @@ async function tube(host, signal) {
     let pos = a.pos;
     if (pos && b.pos && f > 0) pos = [lerp(a.pos[0], b.pos[0], f), lerp(a.pos[1], b.pos[1], f)];
     if (pos && !g) map.dot(pos[0], pos[1], 4.5, CREAM, INK, 1.8);
-    input.value = at; output.textContent = fmt(k + 1); date.textContent = utc(t);
-    const s = f < .5 ? a : b;
-    source.textContent = `box ${fmt(s.h)}° × ${fmt(s.w)}° at 0.25°, coarser 1.5° winds around it`;
-    const hours = gapHours(t);
-    read.textContent = `Slice ${k + 1} of ${ride.length} / ${s.wind
-      ? `inside the ${fmt(hours)}-hour gap: sized by a pilot run of both clouds over this slice’s six hours; particles that stray outside ride the coarser winds`
-      : 'covers the track, ±9°'}`;
   }
-  const play = player(host, signal, dt => { at += dt * .005; if (at > last + 10) at = 0; draw(); });
-  bindSlider(input, play, value => { at = value; draw(); });
-  keys(map.canvas, play, dir => { at = clamp(Math.round(at) + dir, 0, last); draw(); });
-  map.canvas.onpointermove = event => {
-    const [x, y] = map.pointer(event), bd = map.bounds, lat = bd.lat1 - y / map.height * (bd.lat1 - bd.lat0), lon = bd.lon0 + x / map.width * (bd.lon1 - bd.lon0);
-    const s = ride[clamp(Math.round(at), 0, last)];
-    hover.hidden = false;
-    if (!inBox(s, lat, lon) || !shown.length) {
-      if (!coarseShown.length) { hover.textContent = `${place(lat, lon)} / outside the box`; return; }
-      const c = coarseShown.reduce((best, p) => Math.hypot(p.lat - lat, p.lon - lon) < Math.hypot(best.lat - lat, best.lon - lon) ? p : best, coarseShown[0]);
-      hover.textContent = `${place(lat, lon)} / outside the box, coarse 1.5° winds: ${fmt(c.speed)} m/s toward ${toward(c.u, c.v)}`; return;
-    }
-    const q = shown.reduce((best, p) => Math.hypot(p.lat - lat, p.lon - lon) < Math.hypot(best.lat - lat, best.lon - lon) ? p : best, shown[0]);
-    hover.textContent = `${place(lat, lon)} / ${fmt(q.speed)} m/s toward ${toward(q.u, q.v)}`;
-  };
-  map.canvas.onpointerleave = () => { hover.hidden = true; };
+  /* five slices a second, then a short hold on the last one */
+  at = loop(host, signal, { duration: last * 200, hold: 1500 }, value => { at = value * last; draw(); }) * last;
   observeChartSize(host, () => { map.resize(host.clientWidth - 32); draw(); }, signal);
 }
 
@@ -428,11 +330,7 @@ async function resolution(host, signal) {
       <figure><canvas data-inset="fine" role="img" aria-label="Every 0.25° wind vector the box stores in a 3° square around the balloon"></canvas><figcaption>In the box: 0.25° winds</figcaption></figure>
       <figure><canvas data-inset="coarse" role="img" aria-label="The same square read from the coarse 1.5° field"></canvas><figcaption>The same square in the coarse field: 1.5° winds</figcaption></figure>
       <figure><canvas data-inset="diff" role="img" aria-label="The difference between the box's winds and the coarse field at the same points, exaggerated ten times"></canvas><figcaption data-diff-caption>The difference, box minus coarse, arrows ×10</figcaption></figure>
-    </div>
-    ${footer('NOAA GFS at the balloon’s float level')}
-    ${slider('Slice', last, 1, 'Reconstruction cube time slice')}
-    <output class="chart-readout"></output>`;
-  const input = host.querySelector('input'), output = host.querySelector('.fleet-time output'), read = host.querySelector('.chart-readout'), date = host.querySelector('.fleet-date');
+    </div>`;
   const insets = [...host.querySelectorAll('[data-inset]')].map(c => ({ canvas: c, ctx: c.getContext('2d'), kind: c.dataset.inset, size: 0 }));
   /* One inset: a 3° square around the balloon at each field's REAL density — the
    * box's every 0.25° vector (13 × 13), or the coarse field's own 1.5° grid points
@@ -466,12 +364,9 @@ async function resolution(host, signal) {
   function draw() {
     const k = clamp(Math.round(at), 0, last), sl = ride[k];
     for (const inset of insets) drawInset(inset, sl);
-    input.value = k; output.textContent = fmt(k + 1); date.textContent = utc(sl.t);
-    read.textContent = `Slice ${k + 1} of ${ride.length} / ${sl.wind ? `inside the ${fmt(sl.gapH)}-hour gap` : 'near a fix'} / winds of about ${fmt(meanSpeed(sl), 0)} m/s around the balloon`;
   }
-  const meanSpeed = sl => { const pt = sl.patch, n = pt.n; let s = 0; for (let i = 0; i < n * n; i++) s += Math.hypot(patches[pt.off + i * 2], patches[pt.off + i * 2 + 1]); return s / (n * n); };
-  const play = player(host, signal, dt => { at += dt * .0025; if (at > last + 3) at = 0; draw(); });
-  bindSlider(input, play, value => { at = value; draw(); });
+  /* two and a half slices a second, then a short hold */
+  at = loop(host, signal, { duration: last * 400, hold: 1200 }, value => { at = value * last; draw(); }) * last;
   observeChartSize(host, () => {
     const avail = host.clientWidth - 32, perRow = avail >= 560 ? 3 : 2;
     for (const inset of insets) { const w = Math.min(260, Math.floor((avail - 16 * (perRow - 1)) / perRow)); inset.size = w; sizeCanvas(inset.canvas, inset.ctx, w, w); inset.canvas.parentElement.style.width = `${w}px`; }
@@ -486,7 +381,7 @@ async function plain(host, signal) {
   const [cloud, fo, coast, wind] = await Promise.all([clouds(), load('forecast-only.json'), load('coast-atlantic.json'), windField()]);
   if (signal.aborted) return;
   const p = cloud.posterior, { steps, hours, hoursPerStep, tA } = p, A = p.drawn[0], B = p.drawn[steps - 1], nominal = fo.nominal, miss = fo.nominalToB;
-  host.innerHTML = `${heading('Following the winds', 'New Mexico to Spain, May 19 to 28', false)}
+  host.innerHTML = `${heading('Following the winds', 'New Mexico to Spain, May 19 to 28')}
     <div class="chart-legend">${key('A balloon riding the GFS winds', INK)}${key('The fixes', INK, 'dot')}${windKey()}</div>
     <div class="fleet-map-stage"></div>`;
   const map = createMap(WINDS_VIEW, `One simulated balloon carried by the GFS winds alone from the New Mexico fix: up the jet past Newfoundland, around a loop west of the Azores and toward Iberia, ending ${fmt(miss)} km from the fix in Spain.`);
@@ -522,7 +417,7 @@ async function spread(host, signal) {
     const a = Math.floor(s), b = Math.min(steps - 1, a + 1), t = s - a, ia = (i * steps + a) * 2, ib = (i * steps + b) * 2;
     return [(fpos[ia] + (fpos[ib] - fpos[ia]) * t) / 100, (fpos[ia + 1] + (fpos[ib + 1] - fpos[ia + 1]) * t) / 100];
   };
-  host.innerHTML = `${heading('A little noise, a huge spread', `${fo.n} simulated balloons, May 19 to 28`, false)}
+  host.innerHTML = `${heading('A little noise, a huge spread', `${fo.n} simulated balloons, May 19 to 28`)}
     <div class="chart-legend">${key('Balloons with small errors', GRAY, 'dot')}${key('The winds alone', INK)}${key('The fixes', INK, 'dot')}${windKey()}</div>
     <div class="fleet-map-stage"></div>`;
   const map = createMap(WIDE_VIEW, `${fo.n} simulated balloons run forward from the New Mexico fix for eight days with small errors in heading, speed and height, spreading across the Atlantic, Europe and North Africa around the path of the winds alone.`);
@@ -563,7 +458,7 @@ async function arrive(host, signal) {
     const lat = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(th));
     return [lat / rad, (lo + Math.atan2(Math.sin(th) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(lat))) / rad];
   });
-  host.innerHTML = `${heading('The few that come close', `${close.length} of ${fo.n} end within ${fmt(RADIUS)} km of Spain`, false)}
+  host.innerHTML = `${heading('The few that come close', `${close.length} of ${fo.n} end within ${fmt(RADIUS)} km of Spain`)}
     <div class="chart-legend">${key(`Ends within ${fmt(RADIUS)} km of the fix`, BLUE)}${key('The other balloons', GRAY, 'dot')}${key('The fixes', INK, 'dot')}${windKey()}</div>
     <div class="fleet-map-stage"></div>`;
   const map = createMap(WIDE_VIEW, `The ${fo.n} simulated balloons from the previous figure, with the ${close.length} that end within ${fmt(RADIUS)} km of the fix in Spain drawn along their whole route.`);
@@ -597,7 +492,7 @@ async function meeting(host, signal) {
   const [cloud, coast, wind] = await Promise.all([clouds(), load('coast-atlantic.json'), windField()]);
   if (signal.aborted) return;
   const p = cloud.posterior, { n, steps, hours, hoursPerStep, tA } = p, mid = (steps - 1) / 2, half = hours / 2;
-  host.innerHTML = `${heading('Two clouds meeting in the middle', `${n} of the ${fmt(p.nTotal)} joined paths`, false)}
+  host.innerHTML = `${heading('Two clouds meeting in the middle', `${n} of the ${fmt(p.nTotal)} joined paths`)}
     <div class="chart-legend">${key('Forward, from New Mexico', BLUE)}${key('Backward, from Spain', RED)}${key('Joined path', '#9a9c95')}${key('The drawn line', INK)}${windKey()}</div>
     <div class="fleet-map-stage"></div>`;
   const map = createMap(GAP_VIEW, 'Forward and backward clouds of simulated balloons crossing the Atlantic and meeting at the midpoint of the gap, then joined into whole paths with the drawn line through them.');
@@ -653,7 +548,7 @@ function match(host) {
       <circle cx="230" cy="${c.red(230).toFixed(1)}" r="4" fill="${CREAM}" stroke="${INK}" stroke-width="1.4"/>
     </svg><figcaption><b>${c.title}</b><span>${c.note}</span><span class="match-weight"><i style="width:${(weight * 100).toFixed(1)}%"></i></span><span>weight ${weight < .01 ? 'about 0' : weight.toFixed(2)}</span></figcaption></figure>`;
   }).join('');
-  host.innerHTML = `${heading('Matching the halves', 'a sketch, not data', false)}
+  host.innerHTML = `${heading('Matching the halves', 'a sketch, not data')}
     <div class="chart-legend">${key('Forward half', BLUE)}${key('Backward half', RED)}<span class="chart-key"><i class="key-bar" style="background:${PAPER};height:9px"></i>The window either side of the midpoint</span></div>
     <div class="match-panels">${panels}</div>`;
   return Promise.resolve();
@@ -666,7 +561,7 @@ async function line(host, signal) {
   const [cloud, coast] = await Promise.all([clouds(), load('coast-atlantic.json')]);
   if (signal.aborted) return;
   const p = cloud.posterior, { n, steps, hours, hoursPerStep } = p, A = p.drawn[0], B = p.drawn[steps - 1];
-  host.innerHTML = `${heading('Choosing one path', `${n} of the ${fmt(p.nTotal)} candidate paths`, false)}
+  host.innerHTML = `${heading('Choosing one path', `${n} of the ${fmt(p.nTotal)} candidate paths`)}
     <div class="chart-legend">${key('Candidate paths', BLUE)}${key('Where they are at the hour shown', BLUE, 'dot')}${key('The drawn line', RED)}</div>
     <div class="fleet-map-stage"></div>`;
   const map = createMap(GAP_VIEW, 'The candidate paths across the eight-day gap as a faint bundle, with the drawn line through the densest part of it.');
@@ -693,7 +588,6 @@ async function forecast(host, signal) {
   const [f, buffer, coast] = await Promise.all([load('forecast.json'), load('forecast.bin'), load('/assets/payload-dev-log/coastlines.json')]);
   if (signal.aborted) return;
   const pos = new Int16Array(buffer), { members, steps, hours, spreadKm, median, thresholdKm } = f, total = hours[steps - 1], stepH = hours[1] - hours[0];
-  const start = Date.parse(f.start);
   const at = (m, s) => {
     const a = Math.floor(s), b = Math.min(steps - 1, a + 1), t = s - a, ia = (m * steps + a) * 2, ib = (m * steps + b) * 2;
     let dl = pos[ib + 1] - pos[ia + 1]; if (dl > 18000) dl -= 36000; if (dl < -18000) dl += 36000;
@@ -701,26 +595,23 @@ async function forecast(host, signal) {
   };
   const spreadAt = s => { const a = Math.floor(s), b = Math.min(steps - 1, a + 1); return spreadKm[a] + (spreadKm[b] - spreadKm[a]) * (s - a); };
   host.innerHTML = `${heading('Where it goes next', `${members} members: ${f.gefs} GEFS, ${f.aigefs} AIGEFS`)}
-    <div class="fleet-metrics contact-metrics"><span><b data-day>…</b>days after the last fix</span><span><b data-spread>…</b>75% of members within this distance of the median</span><span><b>${fmt(thresholdKm)} km</b>where the forecast stops</span></div>
     <div class="chart-legend">${key('Ensemble members', BLUE)}${key('Median path, the drawn forecast', INK)}${key('Forecast ends', RED, 'diamond')}</div>
     <div class="fleet-map-stage"></div>
-    ${footer('GEFS and AIGEFS members from the May 29 cycle')}
-    <div class="chart-stage"><svg class="spread-chart" role="img" aria-label="Ensemble spread against forecast day, with the 2,000 km stopping threshold"></svg></div>
-    ${slider('Forecast hour', total, 1, 'Hours after the last fix')}
-    <output class="chart-readout"></output>`;
-  const map = createMap(WORLD, 'Sixty-two ensemble trajectories from the last fix in Spain eastward around the world. Space plays, arrow keys step.');
+    <div class="chart-stage"><svg class="spread-chart" role="img" aria-label="Ensemble spread against forecast day, with the 2,000 km stopping threshold"></svg></div>`;
+  const map = createMap(WORLD, 'Sixty-two ensemble trajectories from the last fix in Spain eastward around the world, and their spread against the 2,000 km threshold where the forecast stops.');
   host.querySelector('.fleet-map-stage').prepend(map.canvas);
-  const svg = host.querySelector('.spread-chart'), input = host.querySelector('input'), output = host.querySelector('.fleet-time output'), read = host.querySelector('.chart-readout'), date = host.querySelector('.fleet-date');
+  const svg = host.querySelector('.spread-chart');
   const ns = 'http://www.w3.org/2000/svg', el = (tag, attrs, text) => { const e = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text !== undefined) e.textContent = text; return e; };
   let h = 0, width = 0;
   function drawChart(hour, spread) {
-    const w = width, ht = 150, L = 46, Rm = 12, T = 14, B = 30, ymax = Math.max(2400, ...spreadKm) * 1.05;
+    const w = width, ht = 150, L = 52, Rm = 12, T = 14, B = 30, ymax = Math.max(2400, ...spreadKm) * 1.05;
     const sx = x => L + x / total * (w - L - Rm), sy = y => T + (1 - y / ymax) * (ht - T - B);
     svg.setAttribute('viewBox', `0 0 ${w} ${ht}`); svg.setAttribute('width', w); svg.setAttribute('height', ht); svg.replaceChildren();
-    for (const v of [0, 1000, 2000]) svg.append(el('line', { x1: L, x2: w - Rm, y1: sy(v), y2: sy(v), class: 'grid-line' }), el('text', { x: L - 7, y: sy(v) + 4, 'text-anchor': 'end', class: 'tick' }, `${fmt(v / 1000, 0)}k`));
+    for (const v of [0, 1000, 2000]) svg.append(el('line', { x1: L, x2: w - Rm, y1: sy(v), y2: sy(v), class: 'grid-line' }), el('text', { x: L - 7, y: sy(v) + 4, 'text-anchor': 'end', class: 'tick' }, v ? `${fmt(v / 1000, 0)}k km` : '0'));
     for (let d = 0; d <= total / 24; d += 2) svg.append(el('text', { x: sx(d * 24), y: ht - 10, 'text-anchor': 'middle', class: 'tick' }, `day ${d}`));
-    svg.append(el('text', { x: L, y: 10, class: 'axis-label' }, 'Spread (km)'));
+    svg.append(el('text', { x: L, y: 10, class: 'axis-label' }, 'Spread around the median'));
     svg.append(el('line', { x1: L, x2: w - Rm, y1: sy(thresholdKm), y2: sy(thresholdKm), stroke: RED, 'stroke-dasharray': '4 4' }));
+    svg.append(el('text', { x: w - Rm, y: sy(thresholdKm) - 6, 'text-anchor': 'end', class: 'tick', fill: RED }, 'forecast stops'));
     svg.append(el('path', { d: spreadKm.map((v, k) => `${k ? 'L' : 'M'}${sx(hours[k])},${sy(v)}`).join(' '), fill: 'none', stroke: BLUE, 'stroke-width': 2.2 }));
     svg.append(el('line', { x1: sx(hour), x2: sx(hour), y1: T, y2: ht - B, stroke: '#29292766', 'stroke-dasharray': '3 4' }));
     svg.append(el('circle', { cx: sx(hour), cy: sy(spread), r: 4, fill: BLUE, stroke: CREAM, 'stroke-width': 2 }));
@@ -739,22 +630,15 @@ async function forecast(host, signal) {
     med.push([mf[0] + (ms[0] - mf[0]) * (s - Math.floor(s)), mf[1] + (ms[1] - mf[1]) * (s - Math.floor(s))]);
     map.line(med, { color: INK, width: 2 });
     map.dot(f.lastFix[0], f.lastFix[1], 5, CREAM, INK, 1.6);
-    map.label(f.lastFix[0], f.lastFix[1], 'last fix, May 29', 9, 16);
+    haloLabel(map, f.lastFix[0], f.lastFix[1], 'Last fix, May 29', 9, 18);
     if (done) {
       const [x, y] = map.point(f.divergence.lat, f.divergence.lon);
       ctx.fillStyle = RED; ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.fill();
       map.label(f.divergence.lat, f.divergence.lon, `forecast ends: spread ${fmt(spreadKm[steps - 1])} km`, -11, -10, RED);
     }
-    const spread = spreadAt(s);
-    host.querySelector('[data-day]').textContent = fmt(hour / 24, 1);
-    host.querySelector('[data-spread]').textContent = `${fmt(spread)} km`;
-    drawChart(hour, spread);
-    input.value = hour; output.textContent = fmt(hour); date.textContent = utc(start + hour * 3600000);
-    read.textContent = `75% of the members within ${fmt(spread)} km of the median${done ? ` / past ${fmt(thresholdKm)} km the median is not predicting anything, so the line stops here` : ''}`;
+    drawChart(hour, spreadAt(s));
   }
-  const play = player(host, signal, dt => { h += dt * .016; if (h > total + 70) h = 0; draw(); });
-  bindSlider(input, play, value => { h = value; draw(); });
-  keys(map.canvas, play, dir => { h = clamp(Math.min(h, total) + dir * 12, 0, total); draw(); });
+  h = loop(host, signal, { duration: 9000, hold: 3000 }, value => { h = value * total; draw(); }) * total;
   observeChartSize(host, () => { width = host.clientWidth - 32; map.resize(width); draw(); }, signal);
 }
 

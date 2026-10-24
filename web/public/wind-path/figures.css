@@ -1,6 +1,5 @@
 /* Figure chrome specific to "Drawing the path between packets"; the shared chart
    styles come from /payload-dev-log/article.css. */
-.interactive-chart .fleet-play { padding: 0 14px; width: auto; }
 .chart-key .key-dot { width: 9px; height: 9px; border-radius: 50%; }
 .chart-key .key-diamond { width: 9px; height: 9px; transform: rotate(45deg); border-radius: 1px; }
 .spread-chart { display: block; max-width: 100%; margin-top: 14px; }
@@ -11,10 +10,11 @@
 .tube-inset figure { margin: 0; }
 .tube-inset canvas { display: block; border-radius: 6px; }
 .tube-inset figcaption { margin-top: 6px; font-size: 12px; color: #62675e; }
-/* The map-only figures are as tall as their map at any width; no reserved height. */
+/* The figures are as tall as their content at any width; no reserved height. */
 .interactive-chart[data-chart=replay], .interactive-chart[data-chart=plain], .interactive-chart[data-chart=spread],
 .interactive-chart[data-chart=arrive], .interactive-chart[data-chart=meeting], .interactive-chart[data-chart=match],
-.interactive-chart[data-chart=line] { min-height: 0; }
+.interactive-chart[data-chart=line], .interactive-chart[data-chart=tube], .interactive-chart[data-chart=resolution],
+.interactive-chart[data-chart=forecast] { min-height: 0; }
 
 .match-panels { display: flex; flex-wrap: wrap; gap: 18px; padding: 0 4px 4px; }
 .match-panel { flex: 1 1 200px; margin: 0; }
