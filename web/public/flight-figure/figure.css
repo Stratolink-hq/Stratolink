@@ -1,0 +1,130 @@
+/* The flight figures in "Flights from a satellite view". The card chrome comes from
+   /payload-dev-log/article.css (.interactive-chart). The map overlay takes its colors from
+   the imagery under it; the readout and timeline sit on the card's paper. */
+.interactive-chart[data-chart=flight] {
+  min-height: 0; outline: none; font-variant-numeric: tabular-nums;
+  --ink: #292927; --gray: #6f716b; --rule: #d7d8d1;
+}
+.interactive-chart[data-chart=flight]:focus-visible { box-shadow: 0 0 0 2px #328cb3; }
+[data-chart=flight][data-style=geocolor] {
+  --m-ink: #f2f1eb; --m-place: #e4e3dc; --m-muted: #d6d5ce; --m-track: #ffce00;
+  --m-halo: #141413; --m-fan: #9ad6f2; --m-fan-opacity: .16;
+}
+[data-chart=flight][data-style=map] {
+  --m-ink: #292927; --m-place: #6f716b; --m-muted: #6f716b; --m-track: #292927;
+  --m-halo: #eeeee9; --m-fan: #328cb3; --m-fan-opacity: .12;
+}
+
+/* Heading and imagery switch. */
+[data-chart=flight] .chart-heading { align-items: center; flex-wrap: wrap; }
+.flight-imagery { display: inline-flex; padding: 2px; border-radius: 999px; background: #e9e9e3; }
+.flight-imagery button {
+  padding: 5px 12px; border: 0; border-radius: 999px; background: none; color: var(--gray);
+  font: 500 12px/1 Helvetica, Arial, sans-serif; cursor: pointer;
+}
+.flight-imagery button[aria-checked=true] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(41, 41, 39, .14); }
+.flight-imagery button:focus-visible, .flight-play:focus-visible { outline: 2px solid #328cb3; outline-offset: 1px; }
+
+/* Map beside the readout, or the readout under a wide or small map (.stacked), as a strip on wide cards. */
+.flight-body { display: flex; gap: 20px; align-items: flex-start; }
+[data-chart=flight].stacked .flight-body { flex-direction: column; gap: 14px; }
+.flight-map { position: relative; flex: none; overflow: hidden; border-radius: 10px; background: #d7d8d1; }
+.post-figure .flight-map video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; border-radius: 0; background: none; }
+.flight-overlay { position: absolute; inset: 0; overflow: visible; }
+
+/* Map overlay. */
+.flight-overlay text { fill: var(--m-ink); font: 12px Helvetica, Arial, sans-serif; }
+.flight-overlay .lead { font-size: 13px; font-weight: 700; }
+.flight-overlay .small { font-size: 11.5px; }
+.flight-overlay .place { fill: var(--m-place); }
+.flight-overlay .muted { fill: var(--m-muted); font-weight: 400; }
+.flight-overlay .ocean { font-size: 11px; letter-spacing: .3em; fill: var(--m-place); }
+[data-style=map] .flight-overlay .halo { paint-order: stroke; stroke: var(--m-halo); stroke-width: 3.5px; stroke-linejoin: round; }
+[data-style=geocolor] .flight-overlay .halo { filter: var(--text-shadow); }
+[data-chart=flight].small-map .flight-overlay .lead { font-size: 12px; }
+[data-chart=flight].small-map .flight-overlay .small { font-size: 11px; }
+
+.flight-overlay .track { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.flight-overlay .track.gps { stroke: var(--m-track); stroke-width: 2.2px; }
+/* Solid where GPS fixed the position, dashed where it is estimated. */
+.flight-overlay .track.est, .flight-overlay .track.silent { stroke: var(--m-track); stroke-width: 2.2px; stroke-dasharray: 5 4; stroke-linecap: butt; }
+.flight-overlay .track.casing { display: none; stroke: rgba(0, 0, 0, .35); stroke-width: 4.6px; }
+[data-style=geocolor] .flight-overlay .track.casing { display: inline; }
+.flight-overlay .track.casing.est, .flight-overlay .track.casing.silent { stroke-dasharray: 4 3.5; stroke-linecap: butt; }
+.flight-overlay .fan path { fill: none; stroke: var(--m-fan); stroke-opacity: var(--m-fan-opacity); stroke-width: 1px; }
+.flight-overlay .fixdot { fill: var(--m-track); }
+.flight-overlay .links line { stroke: var(--m-ink); stroke-width: 1.6px; stroke-linecap: round; }
+[data-style=geocolor] .flight-overlay .links { filter: var(--text-shadow); }
+.flight-overlay .ring { fill: none; }
+.flight-overlay .pulse { stroke: var(--m-track); stroke-width: 1.6px; }
+.flight-overlay .broadcast { stroke: var(--m-track); stroke-width: 1.8px; }
+.flight-overlay .last-packet { fill: var(--m-halo); stroke: var(--m-track); stroke-width: 2px; }
+.flight-overlay .glow { fill: var(--m-track); opacity: .18; }
+.flight-overlay .marker { fill: var(--m-track); stroke: var(--m-halo); stroke-width: 2.2px; }
+.flight-overlay .marker.lost { fill: var(--m-halo); stroke: var(--m-track); }
+.flight-overlay .gateway { fill: var(--m-halo); stroke: var(--m-place); stroke-width: 1.2px; }
+.flight-overlay .city { fill: var(--m-place); }
+.flight-overlay .launch { fill: var(--m-halo); stroke: var(--m-ink); stroke-width: 2px; }
+.flight-overlay .scale line { stroke: var(--m-ink); stroke-width: 1.5px; }
+
+/* Readout of the latest packet. */
+.flight-panel { flex: 1 1 auto; min-width: 0; padding: 2px 4px 0; color: var(--ink); }
+[data-chart=flight].stacked .flight-panel { width: 100%; }
+.flight-time { display: flex; align-items: baseline; gap: 6px; }
+.flight-time .time { font-size: 26px; line-height: 1; letter-spacing: -.02em; }
+.flight-time .tz, .flight-panel .cap, .flight-panel .unit, .flight-rows dt, .flight-foot, .flight-status { color: var(--gray); font-size: 12px; }
+.flight-status { display: flex; align-items: center; gap: 7px; margin-top: 8px; }
+.flight-status .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--ink); }
+.flight-panel:not([data-mode=gps]) .dot { background: transparent; }
+.flight-heroes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 20px 0 14px; }
+.flight-heroes .num { display: flex; align-items: baseline; gap: 4px; margin-top: 5px; }
+.flight-heroes .num > span:first-child { font-size: 26px; line-height: 1; letter-spacing: -.02em; }
+/* Fixed-width boxes (sized in figure.js) so changing values don't shift what follows them. */
+.flight-time .time, .flight-heroes .alt, .flight-heroes .temp { display: inline-block; text-align: right; }
+[data-chart=flight].strip .flight-rows dd { display: inline-block; }
+.flight-heroes .unit { font-size: 13px; }
+.flight-rows { margin: 8px 0 0; font-size: 13px; }
+.flight-rows > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 3px 0; }
+.flight-rows dt { margin: 0; }
+.flight-rows dd { margin: 0; text-align: right; }
+.flight-foot { margin: 8px 0 0; }
+[data-chart=flight].stacked .flight-rows { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+@media (max-width: 420px) { [data-chart=flight].stacked .flight-rows { grid-template-columns: 1fr; } }
+
+/* The strip: now, the two big numbers and the rows side by side under a wide map. */
+[data-chart=flight].strip .flight-panel { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 28px; padding-top: 0; }
+[data-chart=flight].strip .flight-now { flex: 0 0 250px; }
+[data-chart=flight].strip .flight-heroes { display: flex; gap: 28px; padding: 0; }
+[data-chart=flight].strip .flight-rows { display: flex; gap: 28px; margin: 0; }
+[data-chart=flight].strip .flight-rows > div { flex-direction: column; justify-content: flex-start; gap: 5px; padding: 0; }
+[data-chart=flight].strip .flight-rows dd { text-align: left; font-size: 15px; line-height: 26px; }
+[data-chart=flight].strip .flight-foot { flex: 1 0 100%; margin: 2px 0 0; }
+
+/* Timeline: play button and a track to drag along. */
+.flight-scrubber { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
+.flight-play {
+  flex: none; display: grid; place-items: center; width: 34px; height: 34px; margin-top: -4px; padding: 0;
+  border: 0; border-radius: 50%; background: var(--ink); color: #fff; cursor: pointer;
+}
+.flight-play svg { width: 13px; height: 13px; fill: currentColor; }
+.flight-play .icon-pause, .playing .flight-play .icon-play { display: none; }
+.playing .flight-play .icon-pause { display: inline; }
+.flight-axis { display: block; overflow: visible; touch-action: none; }
+.flight-axis text { font: 12px Helvetica, Arial, sans-serif; fill: var(--ink); }
+.flight-axis .muted, .flight-axis .hour { fill: var(--gray); }
+.flight-axis .lead { font-weight: 700; }
+.flight-axis .base { stroke: var(--rule); stroke-width: 2px; }
+.flight-axis .done { stroke: var(--ink); stroke-width: 2.2px; }
+.flight-axis .night { fill: #ecebe5; }
+.flight-axis .proj { stroke: var(--ink); stroke-width: 2.2px; stroke-dasharray: 5 4; }
+.flight-axis .tick { stroke: var(--gray); stroke-width: 1px; }
+.flight-axis .pk { fill: #fbfbf9; stroke: var(--rule); stroke-width: 1.4px; }
+.flight-axis .pk.passed { stroke: var(--ink); }
+.flight-axis .pk.last { stroke-width: 2px; }
+.flight-axis .pk.tickmark { stroke: #c9cac2; stroke-width: 1.2px; }
+.flight-axis .pk.tickmark.passed { stroke: var(--ink); }
+.flight-axis .pk.tickmark.last { stroke-width: 2px; }
+.flight-axis .hour.day { fill: var(--ink); }
+.flight-axis .head { fill: var(--ink); stroke: #fbfbf9; stroke-width: 2px; }
+.flight-axis .head.lost { fill: #fbfbf9; stroke: var(--ink); }
+.flight-axis .scrub { fill: transparent; cursor: ew-resize; }

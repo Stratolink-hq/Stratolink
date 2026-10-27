@@ -1,10 +1,11 @@
 import { payloadArticle } from './payload-dev-log.mjs';
 import { windPathArticle } from './wind-path.mjs';
+import { flightsFromAboveArticle } from './flights-from-above.mjs';
 
 export const readingTime = post => Math.max(1, Math.ceil(post.body.replace(/<[^>]*>/g, ' ').trim().split(/\s+/).length / 220));
 
 // Source and editing decisions are recorded in reference/blog-content-audit.md.
-export const posts = [windPathArticle, payloadArticle, {
+export const posts = [flightsFromAboveArticle, windPathArticle, payloadArticle, {
   slug: 'baja-run',
   title: 'The Baja Run',
   category: 'Flight notes',

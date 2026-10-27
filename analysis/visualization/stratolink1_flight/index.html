@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stratolink 1 Flight</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=block">
+  <link rel="stylesheet" href="flight.css">
+</head>
+<body>
+  <main class="page">
+    <div class="stage">
+      <div class="poster" data-style="geocolor">
+        <header class="head">
+          <h1 class="title"></h1>
+          <p class="dek"></p>
+        </header>
+        <video class="background" muted playsinline preload="auto"></video>
+        <svg class="overlay" viewBox="0 0 1080 1350" width="1080" height="1350" aria-hidden="true"></svg>
+        <section class="card" aria-live="off">
+          <div class="card-time"><span class="time"></span><span class="tz"></span></div>
+          <div class="card-status"><span class="dot"></span><span class="status"></span></div>
+          <div class="card-heroes">
+            <div class="hero"><div class="cap">Altitude</div><div class="num"><span class="alt"></span><span class="unit">km</span></div></div>
+            <div class="hero"><div class="cap">Temperature</div><div class="num"><span class="temp"></span><span class="unit">°C</span></div></div>
+          </div>
+          <dl class="card-rows">
+            <div><dt>Speed</dt><dd class="speed"></dd></div>
+            <div><dt>Clouds</dt><dd class="clouds"></dd></div>
+            <div><dt>Sunlight</dt><dd class="sun"></dd></div>
+            <div><dt>UV index</dt><dd class="uv"></dd></div>
+            <div><dt>Heard by</dt><dd class="heard"></dd></div>
+          </dl>
+          <div class="card-foot"></div>
+        </section>
+        <footer class="foot">
+          <p class="note"></p>
+          <p class="source"></p>
+        </footer>
+      </div>
+    </div>
+    <div class="controls" role="group" aria-label="Animation controls">
+      <button type="button" class="play" aria-label="Play">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path class="icon-play" d="M4 2.5v11l9-5.5z"/><path class="icon-pause" d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/></svg>
+        <span class="play-label">Play</span>
+      </button>
+      <div class="segmented" role="radiogroup" aria-label="Imagery">
+        <span class="seg-label">Imagery</span>
+        <button type="button" role="radio" data-style="geocolor">Satellite</button>
+        <button type="button" role="radio" data-style="map">Map</button>
+      </div>
+      <p class="hint">Drag along the timeline to move through the flight. Space plays and pauses; arrow keys step.</p>
+    </div>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="flight.js"></script>
+</body>
+</html>

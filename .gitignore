@@ -108,3 +108,9 @@ simulation/gfs_cache/
 fp-info-cache
 *.kicad_pcb.lck
 *.kicad_pro.lck
+
+# Generated GOES animation output and scan cache
+analysis/visualization/output/
+
+# Exported flight data for the D3 graphic (includes unmasked launch-area positions)
+analysis/visualization/stratolink1_flight/data/
