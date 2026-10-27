@@ -208,7 +208,10 @@ for s in range(len(hours)):
 fc_bin = np.clip(np.rint(np.stack([M[:, :, 1], M[:, :, 0]], -1) * 100), -32767, 32767).astype('<i2')
 open(f'{OUT}/forecast.bin', 'wb').write(fc_bin.tobytes())
 last = fixes[-1]
-forecast = {'members': len(ens), 'gefs': prod['metadata']['members']['gefs'], 'aigefs': prod['metadata']['members']['aigefs'], 'steps': len(hours), 'hours': hours,
+# The ensemble follows listMemberCubes' sorted labels: AIGEFS members (aNN) first, then GEFS (mNN).
+models = ['aigefs'] * prod['metadata']['members']['aigefs'] + ['gefs'] * prod['metadata']['members']['gefs']
+assert len(models) == len(ens)
+forecast = {'members': len(ens), 'gefs': prod['metadata']['members']['gefs'], 'aigefs': prod['metadata']['members']['aigefs'], 'models': models, 'steps': len(hours), 'hours': hours,
             'start': last['time_utc'], 'lastFix': [r2(last['lat']), r2(last['lon'])], 'median': [[r2(b), r2(a)] for a, b in nom],
             'spreadKm': spread, 'thresholdKm': div['threshold_km'], 'divergence': {'time': div['time_utc'], 'spreadKm': div['spread_km'], 'lat': r2(div['lonlat'][1]), 'lon': r2(div['lonlat'][0])}}
 json.dump(forecast, open(f'{OUT}/forecast.json', 'w'), separators=(',', ':'))

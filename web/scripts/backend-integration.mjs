@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { randomBytes, createHash } from 'node:crypto';
 import { createTTNWebhook } from '../server/ttnWebhook.ts';
 import { checkPayloadClaims } from './payload-claim-integration.mjs';
+import { checkRegionalTelemetry } from './regional-telemetry-integration.mjs';
 
 const exec = promisify(execFile);
 const container = `stratolink-backend-${process.pid}-${randomBytes(4).toString('hex')}`;
@@ -43,7 +44,7 @@ try {
   }
   assert.ok(ready, 'Disposable PostgreSQL did not start');
   sql(readFileSync(new URL('supabase/tests/baseline.sql', root), 'utf8'));
-  for (const name of ['20261007003455_community_backend.sql', '20261007003501_telemetry_ingest_contract.sql', '20261007201932_payload_claim_compatibility.sql', '20261008194242_official_team_ownership.sql', '20261009030358_balloon_registration_planning.sql', '20261024000000_freeze_missing_balloon_position.sql']) {
+  for (const name of ['20261007003455_community_backend.sql', '20261007003501_telemetry_ingest_contract.sql', '20261007201932_payload_claim_compatibility.sql', '20261008194242_official_team_ownership.sql', '20261009030358_balloon_registration_planning.sql', '20261024000000_freeze_missing_balloon_position.sql', '20261027000000_community_telemetry_regional_ids.sql']) {
     sql(readFileSync(new URL(`supabase/migrations/${name}`, root), 'utf8'));
   }
   assert.equal(sql('SELECT count(*) FROM public.telemetry'), '1513');
@@ -171,6 +172,7 @@ try {
   await checkPayloadClaims({ sql, service, denied, parallelSql, literal, hash });
   checkRegistrationPlanning({ sql, service, denied, literal });
   await checkOfficialTeam({ sql, service, denied, literal, hash });
+  checkRegionalTelemetry({ sql, service, literal, hash });
 
   // Supabase extension objects have a different owner from its postgres role.
   // Reproduce that boundary so a warning-only REVOKE cannot pass unnoticed.

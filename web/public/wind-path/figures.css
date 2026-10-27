@@ -14,7 +14,7 @@
 .interactive-chart[data-chart=replay], .interactive-chart[data-chart=plain], .interactive-chart[data-chart=spread],
 .interactive-chart[data-chart=arrive], .interactive-chart[data-chart=meeting], .interactive-chart[data-chart=match],
 .interactive-chart[data-chart=line], .interactive-chart[data-chart=tube], .interactive-chart[data-chart=resolution],
-.interactive-chart[data-chart=forecast] { min-height: 0; }
+.interactive-chart[data-chart=forecast], .interactive-chart[data-chart=jitter] { min-height: 0; }
 
 .match-panels { display: flex; flex-wrap: wrap; gap: 18px; padding: 0 4px 4px; }
 .match-panel { flex: 1 1 200px; margin: 0; }
@@ -39,3 +39,12 @@
 }
 
 .chart-key .progress-key { width: 22px; height: 9px; border-radius: 5px; background: linear-gradient(90deg, rgb(188,217,234), #2f86b8, rgb(13,58,92)); }
+
+.jitter-layout { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.jitter-layout .fleet-map-stage { flex: 1 1 400px; min-width: 0; }
+.jitter-grid { flex: 0 1 270px; margin: 0 auto; }
+.jitter-grid svg { display: block; width: 100%; height: auto; }
+.jitter-grid svg text { fill: #62675e; font: 10.5px Helvetica, Arial, sans-serif; }
+.jitter-grid .jitter-cell { cursor: pointer; }
+.jitter-grid .jitter-cell:focus-visible { outline: none; stroke: #706c65; stroke-width: 3; }
+.jitter-key { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: #62675e; }
