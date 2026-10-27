@@ -63,7 +63,8 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-map-gl": "8.1.0",
-    "@vercel/blob": "2.4.0"
+    "@vercel/blob": "2.4.0",
+    "d3": "7.9.0"
   },
   "overrides": {
     "postcss-selector-parser": "7.1.6"

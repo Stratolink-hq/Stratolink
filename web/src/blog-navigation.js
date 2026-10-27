@@ -11,6 +11,7 @@ let articleCleanup;
 const articleModules = {
   'payload-dev-log': () => import('./payload-dev-log/article.js'),
   'wind-path': () => import('./wind-path/article.js'),
+  'flight-figure': () => import('./flight-figure/article.js'),
 };
 let fallbackCleanup;
 history.scrollRestoration = 'manual';
