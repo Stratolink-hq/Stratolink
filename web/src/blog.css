@@ -41,23 +41,28 @@ img { display: block; max-width: 100%; }
 .articles-link { position: absolute; left: clamp(28px, 3vw, 52px); bottom: clamp(28px, 3vw, 52px); display: inline-flex; align-items: center; min-height: 46px; padding: 13px 20px; border: 1px solid rgb(255 255 255 / .6); border-radius: 999px; background: var(--paper); color: #302e2a; font-size: 14px; }
 .latest { display: flex; flex-direction: column; min-width: 0; }
 .section-label { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.4; font-weight: 400; }
-.latest > .section-label { padding: 2px 0 24px; }
-.latest-entry { display: flex; flex: 1; flex-direction: column; padding: 26px 6px; border-top: 1px solid var(--rule); }
-.latest-entry:last-child { border-bottom: 1px solid var(--rule); }
-.latest-entry h3 { margin: 10px 0 26px; font-size: clamp(21px, 1.6vw, 28px); font-weight: 400; line-height: 1.15; letter-spacing: -.025em; }
-.latest-entry p { margin: auto 0 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
+.latest > .section-label { padding: 2px 0 20px; }
+.card-image { display: block; width: 100%; max-width: none; height: auto; aspect-ratio: 16 / 10; object-fit: cover; background: #e3e0d8; }
+.card-meta { color: var(--muted); font-size: 13px; line-height: 1.4; }
+/* Recent images share whatever height the featured post leaves them. */
+.latest-entry { display: flex; flex: 1 1 0; flex-direction: column; }
+.latest-entry + .latest-entry { margin-top: 28px; }
+.latest-entry .card-image { flex: 1 1 0; height: 0; min-height: 130px; aspect-ratio: auto; margin-bottom: 16px; border-radius: 16px; }
+.latest-entry h3 { margin: 8px 0 10px; font-size: clamp(20px, 1.45vw, 26px); font-weight: 400; line-height: 1.15; letter-spacing: -.025em; }
 .article-section { padding-top: 64px; scroll-margin-top: 28px; }
 .article-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; margin-top: 26px; }
-.article-card { display: flex; flex-direction: column; min-height: 250px; padding: 25px; border: 1px solid #e8e4dc; border-radius: 20px; background: #efede7; }
-.article-card h3 { margin: 12px 0 32px; font-size: clamp(21px, 1.6vw, 28px); line-height: 1.15; font-weight: 400; letter-spacing: -.025em; }
-.article-card p { margin: auto 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.article-card { display: flex; flex-direction: column; overflow: hidden; padding: 25px; border: 1px solid #e8e4dc; border-radius: 20px; background: #efede7; }
+.article-card .card-image { width: calc(100% + 50px); margin: -25px -25px 22px; }
+/* Titles reserve two lines and excerpts stop at three, so every card keeps the same rhythm. */
+.article-card h3 { display: -webkit-box; min-height: 2.3em; margin: 10px 0 14px; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; font-size: clamp(21px, 1.6vw, 28px); line-height: 1.15; font-weight: 400; letter-spacing: -.025em; }
+.article-card p { display: -webkit-box; margin: 0 0 22px; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.article-card .card-meta { margin-top: auto; }
 .blog-footer { max-width: 1880px; margin: 0 auto; padding: 50px var(--gutter) 28px; color: var(--muted); font-size: 13px; }
 @media (hover: hover) { .articles-link:hover { background: #fff; } }
 @media (max-width: 1023px) {
   .blog-lead { grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 24px; }
   .featured h2 { max-width: 100%; }
   .article-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .article-card { min-height: 230px; }
 }
 @media (max-width: 700px) {
   :root { --featured-radius: 22px; --post-image-radius: 18px; }
@@ -71,20 +76,20 @@ img { display: block; max-width: 100%; }
   .featured-copy { padding: 26px; }
   .featured h2 { font-size: clamp(36px, 8vw, 52px); }
   .articles-link { left: 26px; bottom: 26px; }
-  .latest > .section-label { padding-bottom: 18px; }
-  .latest-entry { padding: 22px 0; }
-  .latest-entry h3 { margin-bottom: 18px; font-size: 25px; }
-  .latest-entry p { max-width: 46ch; }
+  .latest > .section-label { padding-bottom: 16px; }
+  .latest-entry { flex: none; }
+  .latest-entry .card-image { flex: none; height: auto; aspect-ratio: 16 / 10; }
+  .latest-entry h3 { font-size: 24px; }
   .article-section { padding-top: 38px; }
   .article-grid { gap: 14px; margin-top: 22px; }
-  .article-card { padding: 20px; min-height: 260px; }
+  .article-card { padding: 20px; }
+  .article-card .card-image { width: calc(100% + 40px); margin: -20px -20px 18px; }
   .article-card h3 { font-size: 23px; }
 }
 @media (max-width: 480px) {
   .blog-header nav { width: 100%; justify-content: flex-end; gap: 24px; }
   .featured { min-height: 410px; }
   .article-grid { grid-template-columns: 1fr; }
-  .article-card { min-height: 220px; }
   .blog-footer { padding-top: 36px; }
 }
 
