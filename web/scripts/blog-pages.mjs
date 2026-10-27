@@ -5,10 +5,14 @@ import { socialMetadata } from './social-metadata.mjs';
 const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
 const image = (post, attributes = '', position = post.image.position) => `<img data-post-image src="${escape(post.image.src)}" alt="${escape(post.image.alt)}" width="${post.image.width}" height="${post.image.height}"${position ? ` style="object-position:${escape(position)}"` : ''} ${attributes}>`;
 
+const thumbnail = post => `<img class="card-image" src="${escape(post.image.src)}" alt="" width="${post.image.width}" height="${post.image.height}"${post.image.position ? ` style="object-position:${escape(post.image.position)}"` : ''} loading="lazy">`;
+
 const card = (post, type) => `<a class="${type}" href="/blog/${post.slug}" data-post-link id="${type}-${post.slug}">
+  ${thumbnail(post)}
   <span class="category">${escape(post.category)}</span>
   <h3 data-post-title>${escape(post.title)}</h3>
-  <p>${escape(post.excerpt)}</p>
+  ${type === 'article-card' ? `<p>${escape(post.excerpt)}</p>` : ''}
+  <span class="card-meta"><time datetime="${post.published}">${escape(post.publishedLabel)}</time> · ${readingTime(post)} min read</span>
 </a>`;
 
 function indexMain() {
