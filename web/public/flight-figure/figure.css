@@ -89,7 +89,6 @@
 .flight-rows dd { margin: 0; text-align: right; }
 .flight-foot { margin: 8px 0 0; }
 [data-chart=flight].stacked .flight-rows { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
-@media (max-width: 420px) { [data-chart=flight].stacked .flight-rows { grid-template-columns: 1fr; } }
 
 /* The strip: now, the two big numbers and the rows side by side under a wide map. */
 [data-chart=flight].strip .flight-panel { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 28px; padding-top: 0; }
@@ -128,3 +127,35 @@
 .flight-axis .head { fill: var(--ink); stroke: #fbfbf9; stroke-width: 2px; }
 .flight-axis .head.lost { fill: #fbfbf9; stroke: var(--ink); }
 .flight-axis .scrub { fill: transparent; cursor: ew-resize; }
+
+/* Phones: the card runs to the screen edges, like the wind-path figures, so the map gets
+   nearly the whole width while the heading, readout and timeline stay on the text column.
+   The timeline moves up under the map, so the map and its controls fit on one screen, and
+   the readout packs into the time and the two big numbers on one line, with the rows in a
+   tight list under them. */
+@media (max-width: 600px) {
+  .post-figure.wide:has(> [data-chart=flight]) { width: calc(100% + 40px); margin-left: -20px; }
+  .post-figure.wide > [data-chart=flight] { display: flex; flex-direction: column; padding: 16px 8px 10px; border-radius: 0; }
+  .post-figure.wide:has(> [data-chart=flight]) > figcaption { padding: 0 20px; }
+  [data-chart=flight] .chart-heading { margin-bottom: 12px; padding: 0 12px; }
+  [data-chart=flight].stacked .flight-body { display: contents; }
+  [data-chart=flight] .flight-scrubber { order: 1; margin-top: 10px; padding: 0 4px 0 12px; }
+  [data-chart=flight].stacked .flight-panel {
+    order: 2; display: grid; grid-template-columns: 1fr auto auto; align-items: end; column-gap: 18px;
+    margin-top: 8px; padding: 0 12px;
+  }
+  [data-chart=flight].stacked .flight-now, [data-chart=flight].stacked .flight-heroes { display: contents; }
+  [data-chart=flight].stacked .flight-time, [data-chart=flight].stacked .flight-heroes > div { grid-row: 1; }
+  [data-chart=flight].stacked .flight-status, [data-chart=flight].stacked .flight-rows,
+  [data-chart=flight].stacked .flight-foot { grid-column: 1 / -1; }
+  [data-chart=flight].stacked .flight-time .time, [data-chart=flight].stacked .flight-heroes .num > span:first-child { font-size: 23px; }
+  [data-chart=flight].stacked .flight-heroes .num { margin-top: 2px; }
+  [data-chart=flight].stacked .flight-status { margin-top: 6px; }
+  [data-chart=flight].stacked .flight-rows { display: block; margin-top: 10px; }
+  [data-chart=flight].stacked .flight-rows > div { padding: 2px 0; }
+  [data-chart=flight].stacked .flight-foot { margin-top: 4px; }
+}
+@media (max-width: 370px) {
+  [data-chart=flight].stacked .flight-panel { column-gap: 10px; }
+  [data-chart=flight].stacked .flight-time .time, [data-chart=flight].stacked .flight-heroes .num > span:first-child { font-size: 21px; }
+}
