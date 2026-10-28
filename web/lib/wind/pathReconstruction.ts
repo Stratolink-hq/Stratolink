@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import type { ForecastGpsFix } from './forecastTypes';
 import { BALLOON_STEP_HOURS } from './balloonIntegrate';
 import { reconstructLongGap, type OccupancyFootprint } from './pathReconstructionLongGap';
-import { cubeCovers, sampleWind, type WindCube } from './windCube';
+import { cubeCovers, sampleWind, sampleWindP, type WindCube } from './windCube';
 
 const CFG = {
     N_PARTICLES: 200,
@@ -125,6 +125,10 @@ export type PathReconstructionResult = {
      *  left as cheap straight-line placeholders — the caller should NOT persist
      *  this as the final hindcast so the next tick resumes and fills them in. */
     partial?: boolean;
+    /** Set when `appendFrozenTail` carried the path past the last fix: the span
+     *  the wind-estimated tail covers (it can stop short of `until_utc` where
+     *  the cube ends). */
+    frozen_tail?: { from_utc: string; until_utc: string; reached_utc: string };
 };
 
 /* ----------------------------------------------------------------------------
@@ -676,5 +680,64 @@ export async function computePathReconstruction(opts: {
         gap_bridges: gapBridges,
         gaps,
         compute_ms: Date.now() - t0,
+    };
+}
+
+/**
+ * Carry the path past the last fix to the last ping. A frozen GPS keeps sending
+ * its last position, so those packets are dropped as repeats (dropFrozenRepeats)
+ * and the reconstruction ends at the last real fix, but the balloon was alive
+ * and drifting until its last packet. Integrate the wind at the float pressure
+ * from the last fix to `untilMs` (deterministic, midpoint steps of
+ * BALLOON_STEP_HOURS, the last one partial so the tail ends on the ping's time)
+ * and append it to the drawn path and timed track. Nothing observed pins its
+ * end, so it is an estimate, like the forecast's predicted hindcast. It stops
+ * where the cube's time span ends or the path leaves its boxes (a cube ingested
+ * before the ingest reached the last ping ends 3–6 h past the last fix).
+ * Applied after the hindcast cache, not stored in it: it depends on the last
+ * ping, which moves while the fixes do not, and costs next to nothing.
+ */
+export function appendFrozenTail(
+    result: PathReconstructionResult,
+    lastFix: ForecastGpsFix,
+    untilMs: number,
+    cube: WindCube,
+    pressureHpa: number,
+): PathReconstructionResult {
+    const fromMs = Date.parse(lastFix.time_utc);
+    if (!Number.isFinite(fromMs) || !(untilMs - fromMs >= 60_000)) return result;
+    const cubeEndMs = cube.t0Ms + Math.max(0, cube.grids.length - 1) * cube.stepMs;
+    const stepMs = BALLOON_STEP_HOURS * 3_600_000;
+    const advance = (lat: number, lon: number, u: number, v: number, dtMs: number): [number, number] => {
+        const sec = dtMs / 1000;
+        const cosLat = Math.max(Math.cos(toRad(lat)), 0.05);
+        return [lat + (v * sec) / 111_320, lon + (u * sec) / (111_320 * cosLat)];
+    };
+
+    const tail: ReconstructedTrackPoint[] = [];
+    let lat = lastFix.lat;
+    let lon = lastFix.lon;
+    let t = fromMs;
+    while (t < untilMs) {
+        const dt = Math.min(stepMs, untilMs - t);
+        if (t + dt > cubeEndMs) break;
+        const w1 = sampleWindP(cube, lat, lon, t, pressureHpa);
+        const [latM, lonM] = advance(lat, lon, w1.u, w1.v, dt / 2);
+        const w2 = sampleWindP(cube, latM, lonM, t + dt / 2, pressureHpa);
+        [lat, lon] = advance(lat, lon, w2.u, w2.v, dt);
+        t += dt;
+        if (!cubeCovers(cube, lat, lon, t)) break;
+        tail.push({ lon: R4(lon), lat: R4(lat), time_utc: new Date(t).toISOString() });
+    }
+    if (tail.length === 0) return result;
+    return {
+        ...result,
+        reconstructed_path: [...result.reconstructed_path, ...tail.map((p) => [p.lon, p.lat] as [number, number])],
+        reconstructed_track: [...result.reconstructed_track, ...tail],
+        frozen_tail: {
+            from_utc: new Date(fromMs).toISOString(),
+            until_utc: new Date(untilMs).toISOString(),
+            reached_utc: tail[tail.length - 1].time_utc,
+        },
     };
 }

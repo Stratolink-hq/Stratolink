@@ -166,6 +166,8 @@ export async function buildForecastInputForDevice(
         driftSegmentLonLat: driftSegment,
         baroSamples: baroSamples.length > 0 ? baroSamples : undefined,
         pressureHpa,
+        /* Repeats after the last fix: the balloon was still transmitting. */
+        ...(last.t !== fixes[fixes.length - 1].t ? { lastPingUtc: last.t } : {}),
         forecastHours,
     };
 }

@@ -1,7 +1,7 @@
 import { integrateBalloonPathT } from './balloonIntegrate';
 import type { ForecastEllipse, ForecastGpsFix, MonteCarloForecastInput, StratolinkForecast } from './forecastTypes';
 import { GAP_WIND_MODE, gpsGapHours, STALE_GPS_THRESHOLD_H } from './staleGpsExtrapolation';
-import { computePathReconstruction, type GapCacheEntry, type PathReconstructionResult } from './pathReconstruction';
+import { appendFrozenTail, computePathReconstruction, type GapCacheEntry, type PathReconstructionResult } from './pathReconstruction';
 import { hindcastInputHash, readGapCache, readStoredHindcast, storeHindcast, writeGapCache } from './hindcastStorage';
 import { centerTrack, fetchMemberCube, fetchWindCube, listMemberCubes, sampleWind, type WindCube } from './windCube';
 
@@ -391,7 +391,13 @@ export async function computeMonteCarloForecast(input: MonteCarloForecastInput):
      * (the chord-derived bias was unreliable here — see neutralBias). */
     const bias = neutralBias(recentFixes);
 
-    const { result: reconstruction, hash: reconstructionHash } = await resolveReconstruction(input, reconCube);
+    const resolved = await resolveReconstruction(input, reconCube);
+    const reconstructionHash = resolved.hash;
+    /* Frozen-GPS pings after the last fix: carry the drawn path on to the last one. */
+    const lastPingMs = input.lastPingUtc ? Date.parse(input.lastPingUtc) : NaN;
+    const reconstruction = Number.isFinite(lastPingMs)
+        ? appendFrozenTail(resolved.result, lastFix, lastPingMs, reconCube, lastFix.pressure_hpa ?? input.pressureHpa)
+        : resolved.result;
 
     /* Every member is ONE continuous integration from the last fix (at its real
      * time) through "now" to the horizon — so the predicted-hindcast and forecast
@@ -630,6 +636,7 @@ export async function computeMonteCarloForecast(input: MonteCarloForecastInput):
             reconstructed_track: reconstruction.reconstructed_track,
             gap_bridges: reconstruction.gap_bridges,
             reconstruction_gaps: gapSummaries(reconstruction.gaps),
+            ...(reconstruction.frozen_tail ? { frozen_tail: reconstruction.frozen_tail } : {}),
             reconstruction_input_hash: reconstructionHash,
         },
         metadata: {

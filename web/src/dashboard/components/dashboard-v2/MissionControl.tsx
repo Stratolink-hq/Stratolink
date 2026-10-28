@@ -43,7 +43,7 @@ import { useCommunity } from './community-account';
 import { mergeRegisteredBalloons } from '@/lib/community/types';
 import { defaultFleetFilters, filterFleet, isPlannedBalloon, readFleetFilters, saveFleetFilters } from '@/lib/telemetry/fleetFilters';
 import { forecastEligible, forecastViewFor } from '@/lib/telemetry/forecastEligibility';
-import { flightTrack } from '@/lib/telemetry/flightTrack';
+import { flightTrack, gpsFixes } from '@/lib/telemetry/flightTrack';
 import { extendWithNewerFixes, liveForecastPath, timedForecastLeg } from '@/lib/telemetry/liveTrack';
 import { withLatestTelemetry } from '@/lib/telemetry/fleetSummary';
 import { useFleetReconstruction } from './useFleetReconstruction';
@@ -131,7 +131,7 @@ export default function MissionControlScreen() {
         ? filteredDevices.filter(device => !isPlannedBalloon(device.status) && (fleetHistory.rowsByDevice[device.id]?.length ?? 0) > 1).map(device => device.id)
         : []);
     const fleetTracks = useMemo(() => Object.fromEntries(devices.map(device => [device.id,
-        reconstructedFlightTrack(flightTrack(fleetHistory.rowsByDevice[device.id] ?? []), fleetReconstruction[device.id] ?? []),
+        reconstructedFlightTrack(gpsFixes(fleetHistory.rowsByDevice[device.id] ?? []), fleetReconstruction[device.id] ?? []),
     ])), [devices, fleetHistory.rowsByDevice, fleetReconstruction]);
 
     const [fleetScrubT, setFleetScrubT] = useState<number | null>(null);
@@ -284,7 +284,7 @@ export default function MissionControlScreen() {
         /* Until the clock mounts, fall back to the last packet (deterministic). */
         const endT = archived ? rows[rows.length - 1].t : (nowMs ?? rows[rows.length - 1].t);
         const durationMs = Math.max(0, endT - launchT);
-        const fixes = flightTrack(rows.filter(r => r.t >= launchT)).map(p => ({ lon: p.lon, lat: p.lat, t: p.t }));
+        const fixes = gpsFixes(rows.filter(r => r.t >= launchT)).map(p => ({ lon: p.lon, lat: p.lat, t: p.t }));
         const timed = forecast.hindcastTrack.map(p => ({ lon: p.lon, lat: p.lat, t: p.t }));
         const line: Array<{ lon: number; lat: number }> = timed.length >= 2
             ? extendWithNewerFixes(timed, fixes)
@@ -552,7 +552,7 @@ function MapColumn({
     const globeStage = useGlobePortal();
     const portalPreview = globeStage === 'footer' || globeStage === 'entering';
     const { showGateways, showReceivingStations, showDayNight, showFlightTrail, showProjectedPath } = useDashboardControls();
-    const trackPoints: V2FlightPoint[] = useMemo(() => flightTrack(visibleRows), [visibleRows]);
+    const trackPoints: V2FlightPoint[] = useMemo(() => gpsFixes(visibleRows), [visibleRows]);
 
     /* The likely (reconstructed) path used to glide the balloon as you scrub.
      * Prefer the backend's per-point timestamps, which are anchored to the
@@ -565,7 +565,10 @@ function MapColumn({
      * target and the marker then follow every new fix, not just the ones the
      * last run knew about. */
     const hindcastTrack: V2FlightPoint[] = useMemo(() => {
-        const timed = forecast.hindcastTrack;
+        /* A stale-GPS forecast draws the drift past the last fix itself (the
+         * predicted hindcast), so the stored track's frozen tail is cut there. */
+        const lastFixT = trackPoints.length ? trackPoints[trackPoints.length - 1].t : Infinity;
+        const timed = forecast.predictedHindcast.length >= 2 ? forecast.hindcastTrack.filter(p => p.t <= lastFixT) : forecast.hindcastTrack;
         if (timed.length >= 2) return extendWithNewerFixes(timed.map(p => ({ lon: p.lon, lat: p.lat, t: p.t })), trackPoints);
         const pts = forecast.hindcastPath;
         if (pts.length < 2 || trackPoints.length === 0) return [];
@@ -573,11 +576,11 @@ function MapColumn({
         const t1 = trackPoints[trackPoints.length - 1].t;
         const span = t1 - t0 || 1;
         return pts.map(([lon, lat], i) => ({ lon, lat, t: t0 + (i / (pts.length - 1)) * span }));
-    }, [forecast.hindcastTrack, forecast.hindcastPath, trackPoints]);
+    }, [forecast.hindcastTrack, forecast.hindcastPath, forecast.predictedHindcast, trackPoints]);
 
     /* Split the hindcast into runs by certainty: a segment that bridges a long
-     * gap since the last transmission (> LONG_GAP_HR) is "estimated" and drawn
-     * tightly-dashed; the rest stay solid. Uses the real per-point timestamps
+     * gap since the last transmission (> LONG_GAP_HR), or the frozen tail past
+     * the last fix, is "estimated" and drawn tightly-dashed; the rest stay solid. Uses the real per-point timestamps
      * and the actual GPS-fix times — needs the timed track, so older forecasts
      * (no timestamps) just render as one solid line. */
     const hindcastSegments = useMemo<Array<{ coords: Array<[number, number]>; estimated: boolean }>>(() => {
@@ -590,6 +593,7 @@ function MapColumn({
         /* Is the time `t` inside a fix-to-fix interval longer than the long-gap
          * threshold? (linear scan; the track is short). */
         const estimatedAt = (t: number): boolean => {
+            if (t > fixT[fixT.length - 1]) return true;   /* the frozen tail past the last fix */
             let i = 0;
             while (i < fixT.length - 1 && fixT[i + 1] < t) i++;
             const a = fixT[i];

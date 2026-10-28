@@ -225,6 +225,16 @@ class MissionFixesTests(unittest.TestCase):
         ]
         self.assertEqual(self.run_on(rows), [(self.at(0), 40.0, -6.0), (self.at(3), 40.0, -5.9)])
 
+    def test_each_fix_records_the_last_packet_of_its_run(self):
+        at = self.at
+        rows = [{"time": at(0), "lat": 40.0, "lon": -6.0}, {"time": at(5), "lat": 40.0, "lon": -6.0},
+                {"time": at(10), "lat": 40.1, "lon": -5.9}, {"time": at(15), "lat": 40.1, "lon": -5.9},
+                {"time": at(20), "lat": 40.1, "lon": -5.9}]
+        ns = base_namespace(supa=lambda table, params: rows, device_id_filter=lambda d: f"eq.{d}")
+        lift(["repair_split_fixes", "mission_fixes"], ns)
+        fixes = ns["mission_fixes"]("dev", "2026-05-28T00:00:00+00:00")
+        self.assertEqual([(f["t"], f.get("until")) for f in fixes], [(at(0), at(5)), (at(10), at(20))])
+
     def test_split_fix_takes_the_stale_coordinate_from_the_next_packet(self):
         at = self.at
         rows = [  # lon moved, lat stale at 08:05; lat catches up at 08:10 (the stratolink-3 17:09/17:14 shape)
@@ -261,7 +271,7 @@ class CubeSpanTests(unittest.TestCase):
                 events.append(("recon", start, end, step_h)) or ({"grids": []}, 1, 1)),
             write_cube=lambda device, suffix, cube, nlat, nlon, tag: events.append(("write", suffix)),
         )
-        lift(["fields_for", "build_cube"], ns)
+        lift(["fields_for", "recon_end", "build_cube"], ns)
         return ns["build_cube"], events
 
     def test_single_fix_builds_only_the_forecast_tube(self):
@@ -289,6 +299,15 @@ class CubeSpanTests(unittest.TestCase):
         kept = events[2][1]
         self.assertEqual(kept, sorted({("cyc", h) for h in range(0, 24, 3)}))
         self.assertEqual(events[4], ("write", ""))
+
+    def test_recon_reaches_two_steps_past_the_last_ping_after_a_frozen_last_fix(self):
+        build_cube, events = self.build_cube_harness(recon_tube=False)
+        fixes = [{"lat": 1, "lon": 2, "t": "2026-10-01T00:10:00Z"},
+                 {"lat": 1.5, "lon": 2.5, "t": "2026-10-02T13:40:00Z", "until": "2026-10-02T20:55:00Z"}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            build_cube("frozen", fixes, 280.0, None)
+        _, start, end, step_h = events[3]
+        self.assertEqual(end, datetime(2026, 10, 3, 0, tzinfo=timezone.utc))   # floor(20:55) + 6 h
 
     def test_recon_tube_is_the_default_and_keeps_the_forecast_tubes_fields_warm(self):
         build_cube, events = self.build_cube_harness(recon_tube=True)

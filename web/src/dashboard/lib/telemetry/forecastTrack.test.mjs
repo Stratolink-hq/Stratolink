@@ -47,3 +47,14 @@ test('the estimated leg runs from the last fix to the balloon and no further', (
     assert.equal(estimatedLeg(lastFix, legs, 8 * H), null);
     assert.equal(estimatedLeg({ ...lastFix, t: 11 * H }, legs, 12 * H), null);
 });
+
+test('lastFixTime is the first packet of a trailing run of frozen-GPS repeats', async () => {
+    const { lastFixTime } = await import('./forecastTrack.ts');
+    const rows = [
+        { t: 1, lat: 36.0, lon: -4.0 }, { t: 2, lat: 36.8893, lon: -4.5322 }, { t: 3, lat: null, lon: null },
+        { t: 4, lat: 36.8893, lon: -4.5322 }, { t: 5, lat: 36.8893, lon: -4.5322 }, { t: 6, lat: null, lon: null },
+    ];
+    assert.equal(lastFixTime(rows), 2);
+    assert.equal(lastFixTime([{ t: 1, lat: 1, lon: 2 }, { t: 2, lat: 1, lon: 3 }]), 2);
+    assert.equal(lastFixTime([{ t: 1, lat: null, lon: null }]), null);
+});
