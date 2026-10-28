@@ -379,6 +379,22 @@ def mission_since(launched_at):
     return floor.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def repair_split_fixes(fixes, max_gap_s=15 * 60):
+    """A fix whose lon changed but lat did not carries a stale latitude (the May
+    2026 firmware polled latitude first, per field, and a timed-out poll returned
+    the cached value); when the very next fix changes the latitude, that value
+    belongs to this fix's solution. Mirrors repairSplitFixes in
+    lib/wind/trackSegments.ts; run before dropping repeats."""
+    out = [dict(f) for f in fixes]
+    for i in range(1, len(out) - 1):
+        a, b, c = out[i - 1], out[i], out[i + 1]
+        if (tparse(c["t"]) - tparse(b["t"])).total_seconds() > max_gap_s:
+            continue
+        if b["lat"] == a["lat"] and b["lon"] != a["lon"] and c["lat"] != b["lat"]:
+            b["lat"] = c["lat"]
+    return out
+
+
 def mission_fixes(device, since_iso):
     """All GPS fixes since launch (full mission), canonical + alias ids merged by
     time like the compute's fetchTelemetryMerged — for the cube's track + span."""
@@ -392,12 +408,20 @@ def mission_fixes(device, since_iso):
     # lat -222) — a single outlier blows up the bounding box and coarsens the grid.
     # One row per timestamp (an alias can echo the canonical row's time).
     seen = set()
-    out = []
+    packets = []
     for r in rows:
         if not (-90 <= r["lat"] <= 90 and -180 <= r["lon"] <= 180) or r["time"] in seen:
             continue
         seen.add(r["time"])
-        out.append({"lat": r["lat"], "lon": r["lon"], "t": r["time"], "alt": r.get("altitude_m")})
+        packets.append({"lat": r["lat"], "lon": r["lon"], "t": r["time"], "alt": r.get("altitude_m")})
+    # A packet at exactly the previous fix's lat/lon is a frozen-GPS re-send, not a
+    # fix — keep the first of each run (mirrors dropFrozenRepeats in
+    # lib/wind/trackSegments.ts, so the cube's gaps and last fix match the compute's).
+    out = []
+    for f in repair_split_fixes(packets):
+        if out and f["lat"] == out[-1]["lat"] and f["lon"] == out[-1]["lon"]:
+            continue
+        out.append(f)
     return out
 
 
