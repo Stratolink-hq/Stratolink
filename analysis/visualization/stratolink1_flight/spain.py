@@ -23,7 +23,8 @@ ping with a position, an hour after the last fix near Málaga; the GPS had froze
 follows the reconstruction's frozen tail along the winds.
 
 Imagery. EUMETSAT's MTG GeoColour (Meteosat-12 FCI full disk, every 10 minutes) from the
-EUMETView WMS, in plate carrée, resampled onto the map. Scans (export.py) moves the clouds between
+EUMETView WMS, in plate carrée, resampled onto the map. It is about 2 km, so by day it is sharpened
+with the 500 m VIS0.6 band (FCI HRFI) from the same WMS (see sharpen). Scans (export.py) moves the clouds between
 scans. The paper map's clouds are the GeoColour's bright, grey pixels.
 
     python spain.py              # data and both backgrounds
@@ -92,6 +93,8 @@ CITIES = [("Madrid", 40.4168, -3.7038), ("Salamanca", 40.9701, -5.6635), ("Cáce
 WMS = "https://view.eumetsat.int/geoserver/ows"
 LAYER = "mtg_fd:rgb_geocolour"
 LON0, LON1, LAT0, LAT1, RES = -11.0, -1.6, 35.6, 41.9, 0.006
+# The 500 m visible band (FCI HRFI VIS0.6), for daytime detail; DETAIL scales how much it adds.
+VIS_LAYER, VIS_RES, DETAIL = "mtg_fd:vis06_hrfi", 0.004, 1.3
 
 
 def local(t: float) -> datetime:
@@ -256,12 +259,13 @@ def solar_cos_zenith(t: float, lat, lon):
     return np.sin(lat) * np.sin(dec) + np.cos(lat) * np.cos(dec) * np.cos(ha)
 
 
-def scan(t: pd.Timestamp):
-    """One GeoColour scan over the WMS box, cached; None if EUMETView has nothing for it."""
-    path = MTG_CACHE / f"{LON0}_{LON1}_{LAT0}_{LAT1}_{RES}" / f"{t:%Y%m%dT%H%M}.png"
+def scan(t: pd.Timestamp, layer: str = LAYER, res: float = RES):
+    """One scan of a layer over the WMS box, cached; None if EUMETView has nothing for it."""
+    path = MTG_CACHE / f"{'' if layer == LAYER else layer.split(':')[1] + '_'}{LON0}_{LON1}_{LAT0}_{LAT1}_{res}" / f"{t:%Y%m%dT%H%M}.png"
     if not path.exists():
-        w, h = round((LON1 - LON0) / RES), round((LAT1 - LAT0) / RES)
-        r = requests.get(WMS, params={"service": "WMS", "version": "1.3.0", "request": "GetMap", "layers": LAYER, "styles": "",
+        path.parent.mkdir(parents=True, exist_ok=True)
+        w, h = round((LON1 - LON0) / res), round((LAT1 - LAT0) / res)
+        r = requests.get(WMS, params={"service": "WMS", "version": "1.3.0", "request": "GetMap", "layers": layer, "styles": "",
                                       "crs": "EPSG:4326", "bbox": f"{LAT0},{LON0},{LAT1},{LON1}", "width": w, "height": h,
                                       "format": "image/png", "time": f"{t:%Y-%m-%dT%H:%M:%SZ}"}, timeout=120)
         if r.status_code != 200 or not r.headers.get("content-type", "").startswith("image/"):
@@ -275,15 +279,34 @@ def scan_times(t0: float, t1: float) -> pd.DatetimeIndex:
     return pd.date_range(pd.Timestamp(t0, unit="s", tz="UTC").floor("10min"), pd.Timestamp(t1, unit="s", tz="UTC").ceil("10min"), freq="10min")
 
 
+def sharpen(rgb: np.ndarray, vis: np.ndarray, day: np.ndarray) -> np.ndarray:
+    """GeoColour (about 2 km) sharpened by day with the 500 m VIS0.6: its colors, smoothed of the 2 km
+    blocks, times the ratio of the visible band to a blur of itself (detail finer than 2 km). The
+    band comes as 8-bit grey from the WMS, so it is smoothed a little first."""
+    f = rgb.astype(np.float32) / 255
+    ratio = np.clip((vis + 2) / (gaussian_filter(vis, 1.2) + 2), 0.6, 1.6)
+    f = gaussian_filter(f, (1.0, 1.0, 0)) * (1 + DETAIL * (ratio - 1) * day)[..., None]
+    return (np.clip(f, 0, 1) * 255 + 0.5).astype(np.uint8)
+
+
 def imagery(t0: float, t1: float):
-    (MTG_CACHE / f"{LON0}_{LON1}_{LAT0}_{LAT1}_{RES}").mkdir(parents=True, exist_ok=True)
     times = scan_times(t0, t1)
-    with ThreadPoolExecutor(4) as pool:
-        raw = list(pool.map(scan, times))
     lon, lat = target_lonlat()
+    day = {t: smoothstep(0.03, 0.2, solar_cos_zenith(t.timestamp(), lat, lon)) for t in times}
+    with ThreadPoolExecutor(6) as pool:  # EUMETView renders each image; kept gentle on a free service
+        raw = list(pool.map(scan, times))
+        vis = list(pool.map(lambda t: scan(t, VIS_LAYER, VIS_RES) if day[t].max() > 0 else None, times))
     mx, my = ((lon - LON0) / RES).astype(np.float32), ((LAT1 - lat) / RES).astype(np.float32)
-    keep = [(t.timestamp(), cv2.remap(img, mx, my, cv2.INTER_CUBIC)) for t, img in zip(times, raw) if img is not None]
-    print(f"{len(keep)} of {len(times)} scans")
+    vx, vy = ((lon - LON0) / VIS_RES).astype(np.float32), ((LAT1 - lat) / VIS_RES).astype(np.float32)
+    keep = []
+    for t, img, v in zip(times, raw, vis):
+        if img is None:
+            continue
+        rgb = cv2.remap(img, mx, my, cv2.INTER_CUBIC)
+        if v is not None:
+            rgb = sharpen(rgb, cv2.remap(gaussian_filter(v[..., 0].astype(np.float32), 0.6), vx, vy, cv2.INTER_LINEAR), day[t])
+        keep.append((t.timestamp(), rgb))
+    print(f"{len(keep)} of {len(times)} scans, {sum(v is not None for v in vis)} sharpened")
     return np.array([k[0] for k in keep]), [k[1] for k in keep]
 
 
