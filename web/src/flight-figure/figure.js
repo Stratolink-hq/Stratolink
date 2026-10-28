@@ -160,24 +160,65 @@ function mountFlight(host, signal) {
     const tri = (x, y) => `M${x},${y - 5}L${x + 4.5},${y + 3.5}L${x - 4.5},${y + 3.5}Z`;
     for (const [u, v] of data.gateways) places.append('path').attr('class', 'gateway').attr('d', tri(X(u), Y(v)));
 
-    // Labelled moments, each shown once the animation reaches it.
-    const moments = [], placed = [];
+    // Labelled moments, each shown once the animation reaches it (and, given an until, only until then).
+    // A label marked clear tries spots around its point and keeps the one crossed by the fewest lines
+    // (the track, and the lines to the receivers of every packet heard while it is up), off the
+    // labels it shares the screen with and out of the bottom strip.
+    const origin = svg.node().getBoundingClientRect();
+    const rectOf = g => { const r = g.node().getBoundingClientRect(); return [r.left - origin.left - 3, r.top - origin.top - 3, r.right - origin.left + 3, r.bottom - origin.top + 3]; };
+    const overlaps = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+    function crosses([x0, y0, x1, y1], [ax, ay, bx, by]) {
+      const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+      if (inside(ax, ay) || inside(bx, by)) return true;
+      const cut = (cx, cy, ex, ey) => {
+        const d = (bx - ax) * (ey - cy) - (by - ay) * (ex - cx);
+        if (!d) return false;
+        const s = ((cx - ax) * (ey - cy) - (cy - ay) * (ex - cx)) / d, r = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
+        return s >= 0 && s <= 1 && r >= 0 && r <= 1;
+      };
+      return cut(x0, y0, x1, y0) || cut(x0, y1, x1, y1) || cut(x0, y0, x0, y1) || cut(x1, y0, x1, y1);
+    }
+    const trackSegs = data.segments.flatMap(s => s.pts.slice(1).map((p, i) => [X(s.pts[i][1]), Y(s.pts[i][2]), X(p[1]), Y(p[2])]));
+    const balloonAt = t => { const k = Math.max(0, Math.min(F.count - 1, Math.round((t - F.t0) / F.step))); return [X(F.u[k]), Y(F.v[k])]; };
+    const linksBetween = (t0, t1) => data.packets.filter(p => p.t >= t0 && p.t <= t1)
+      .flatMap(p => { const [x, y] = balloonAt(p.t); return p.receivers.map(([u, v]) => [x, y, X(u), Y(v)]); });
+    const SPOTS = [[0, 'right'], [-20, 'right'], [20, 'right'], [0, 'left'], [-20, 'left'], [20, 'left'],
+      [-38, 'right'], [38, 'right'], [-38, 'left'], [38, 'left']];
+
+    const moments = [], placed = [], shown = [];
     for (const l of data.labels) {
+      const lines = small && l.short ? l.short : l.lines;
       let y = Y(l.v);
       if (l.under != null) y = Math.max(y + 6, placed[l.under] + 18);
       placed.push(y + (l.dy || 0));
       if (l.marker) marks.append('circle').attr('class', l.marker).attr('cx', X(l.u)).attr('cy', Y(l.v)).attr('r', 5.5);
-      const g = label(notes, X(l.u), y, small && l.short ? l.short : l.lines, { dy: l.dy || 0, side: l.side });
-      moments.push([l.t, g]);
+      let g;
+      if (l.clear) {
+        const until = l.until ?? Infinity, segs = [...trackSegs, ...linksBetween(l.t, until)];
+        const alive = shown.filter(o => o.t < until && l.t < o.until);
+        let best = Infinity;
+        for (const [dy, side] of [[l.dy || 0, l.side || 'right'], ...SPOTS]) {
+          const c = label(notes, X(l.u), y, lines, { dy, side }), r = rectOf(c);
+          const score = segs.filter(sg => crosses(r, sg)).length + 500 * alive.filter(o => overlaps(r, o.r)).length
+            + (r[0] < 2 || r[1] < 2 || r[2] > Sw - 2 || r[3] > Sh - 30 ? 1000 : 0);
+          if (score < best) { best = score; g?.remove(); g = c; } else c.remove();
+          if (!score) break;
+        }
+        shown.push({ t: l.t, until, r: rectOf(g) });
+      } else g = label(notes, X(l.u), y, lines, { dy: l.dy || 0, side: l.side });
+      moments.push([l.t, l.until ?? Infinity, g]);
     }
     const projLabel = data.fan ? label(notes, X(ev.end.u), Y(ev.end.v), [['If the wind held', 'lead']]) : null;
     const fanLabel = notes.append('g');
 
-    // Place names give way to the labelled moments and to each other; the receivers label goes on
-    // the easternmost receiver that has room for it.
+    // Place names give way to the labelled moments, to each other and to the bottom strip, which
+    // holds the image time and the scale bar; the receivers label goes on the easternmost receiver
+    // on the map that has room for it.
     const box = g => g.node().getBoundingClientRect();
     const hits = (a, b, pad = 3) => a.left < b.right + pad && b.left < a.right + pad && a.top < b.bottom + pad && b.top < a.bottom + pad;
+    const frame = svg.node().getBoundingClientRect();
     const taken = notes.selectAll(':scope > g').nodes().map(n => n.getBoundingClientRect()).filter(r => r.width);
+    taken.push({ left: frame.left, right: frame.right, top: frame.bottom - 30, bottom: frame.bottom });
     const place = (draw) => {
       const g = draw();
       if (!g) return false;
@@ -185,7 +226,7 @@ function mountFlight(host, signal) {
       taken.push(box(g));
       return true;
     };
-    [...data.gateways].sort((a, b) => b[0] - a[0])
+    [...data.gateways].sort((a, b) => b[0] - a[0]).filter(([u, v]) => u >= 0 && u <= 1 && Y(v) > 12)
       .some(([u, v]) => place(() => label(places, X(u), Y(v), [['Ground receivers', 'place']], { dx: 9, size: 'small' })));
     for (const c of data.cities) place(() => label(places, X(c.u), Y(c.v), [[c.name, 'place']], { dx: 6, dy: -7, size: 'small' }));
     data.map.ocean.some(([u, v]) => place(() => {
@@ -258,7 +299,7 @@ function mountFlight(host, signal) {
         lastPkt.attr('cx', X(ev.lastPacket.u)).attr('cy', Y(ev.lastPacket.v)).attr('opacity', since >= 0 ? 1 : 0);
       }
 
-      for (const [shownAt, g] of moments) g.attr('opacity', t >= shownAt ? 1 : 0);
+      for (const [shownAt, until, g] of moments) g.attr('opacity', t >= shownAt && t < until ? 1 : 0);
       if (data.fan) {
         const since = t - ev.lastPacket.t, fk = mode === 'silent' ? bisectRight(data.fan.t, t) : 0;
         fanPaths.attr('d', p => (fk >= 2 ? fanPath(p.slice(0, fk)) : null));
