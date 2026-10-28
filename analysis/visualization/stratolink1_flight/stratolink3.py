@@ -23,21 +23,29 @@ The day side is Rayleigh corrected with pyspectral, as in Satpy's true color, th
 look like CIRA's GeoColor: a log stretch with per-channel black points (a near-black ocean), a
 synthetic green with little near-infrared, per-channel gammas fitted so desert land matches
 GeoColor's mean color (from a SLIDER image of the same region, Oct. 26, 2026) and a gentle
-S-curve, all dialed about halfway back toward neutral. Only the compressed chunks over the map are fetched. Frames
+S-curve, all dialed about halfway back toward neutral. By day the colors are sharpened with the
+red band at 0.5 km from the CONUS sector (ABI-L2-CMIPC C02): each scan's colors are multiplied by
+the ratio of that band to a blur of itself, so they keep the 2 km grade but gain the finer detail;
+the ratio is smoothed a little across rows, where the band's detector striping runs, and softened.
+Only the compressed chunks over the map are fetched. Frames
 every 5 minutes; Scans (export.py) moves the clouds between scans. Needs pyspectral, which
 downloads its spectral responses and Rayleigh tables on first use.
 
     python stratolink3.py              # data and both backgrounds
     python stratolink3.py --json-only
+    python stratolink3.py --backgrounds-only   # both backgrounds on the published flight.json's frames
     python stratolink3.py --test       # three composites as PNGs in ../output, for tuning
 """
 from __future__ import annotations
 
 import json
 import math
+import os
 import subprocess
+import threading
+import time
 import zlib
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -69,8 +77,8 @@ HEARD_S = 30 * 60  # a packet within this long means the balloon is still being 
 # Map: Lambert conformal, San Francisco to past Albuquerque and down to the loop off Baja.
 MAP_CRS = ccrs.LambertConformal(central_longitude=-113.6, central_latitude=32.8, standard_parallels=(29.5, 36.5))
 X0, X1, Y0, Y1 = -850_000, 880_000, -710_000, 662_000  # metres
-GRID_W = 1200
-GRID_H = round(GRID_W * (Y1 - Y0) / (X1 - X0))
+GRID_W = 1600
+GRID_H = 2 * round(GRID_W * (Y1 - Y0) / (X1 - X0) / 2)  # even, for H.264
 GRID_TAG = f"s3_{GRID_W}"
 GEOD = pyproj.Geod(ellps="WGS84")
 TZ = "America/Los_Angeles"
@@ -81,6 +89,7 @@ CITIES = [("Los Angeles", 34.0522, -118.2437), ("San Diego", 32.7157, -117.1611)
 OCEAN = [(-121.2, 30.8), (-120.6, 29.0), (-119.5, 28.2)]  # candidate spots for the ocean label
 
 BUCKET = "noaa-goes18/ABI-L2-MCMIPF"
+DETAIL_BUCKET = "noaa-goes18/ABI-L2-CMIPC"  # the CONUS sector's 0.5 km red band (C02), every 5 minutes
 BANDS = ("C01", "C02", "C03", "C13")
 NIGHT_SEA, NIGHT_LAND = np.array([0.035, 0.065, 0.11]), np.array([0.075, 0.08, 0.09])
 
@@ -216,6 +225,31 @@ def list_scans(fs):
     return sorted(scans)
 
 
+_local = threading.local()
+
+
+def http() -> requests.Session:
+    """A keep-alive session per thread; opening a new TLS connection for every chunk was most of
+    the download time."""
+    if not hasattr(_local, "session"):
+        _local.session = requests.Session()
+        _local.session.mount("https://", requests.adapters.HTTPAdapter(pool_maxsize=16))
+    return _local.session
+
+
+def fetch_range(url: str, start: int, size: int) -> bytes:
+    """One byte range, retried: with many workers S3 now and then resets a connection."""
+    for attempt in range(5):
+        try:
+            r = http().get(url, headers={"Range": f"bytes={start}-{start + size - 1}"}, timeout=60)
+            r.raise_for_status()
+            return r.content
+        except requests.RequestException:
+            if attempt == 4:
+                raise
+            time.sleep(0.5 * 2 ** attempt)
+
+
 def read_region(fs, key, rows, cols):
     """The chunks of four bands covering rows × cols, fetched by byte range and decoded here
     (gzip and, if used, HDF5's byte shuffle); about 2 s per scan instead of a minute through
@@ -238,7 +272,7 @@ def read_region(fs, key, rows, cols):
 
     def get(job):
         band, r, c, off, size, scale, offset, fill, shuffled = job
-        raw = np.frombuffer(zlib.decompress(requests.get(url, headers={"Range": f"bytes={off}-{off + size - 1}"}, timeout=60).content), np.uint8)
+        raw = np.frombuffer(zlib.decompress(fetch_range(url, off, size)), np.uint8)
         if shuffled:
             b = raw.reshape(2, -1)
             raw = np.stack([b[0], b[1]], axis=1).reshape(-1)
@@ -246,9 +280,43 @@ def read_region(fs, key, rows, cols):
         v[v == fill] = np.nan
         out[band][r * ch:(r + 1) * ch, c * cw:(c + 1) * cw] = v * scale + offset
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=16) as pool:
         list(pool.map(get, jobs))
     return out, r0 * ch, c0 * cw
+
+
+def read_band(fs, key, var, sx, sy, blur=0.0):
+    """One band of a fixed-grid file sampled at the scan angles (sx, sy), fetching only the chunks
+    that cover them (as read_region); blurred first, in source pixels, to anti-alias."""
+    url = f"https://noaa-goes18.s3.amazonaws.com/{key.split('/', 1)[1]}"
+    with fs.open(key, block_size=2**16, cache_type="bytes") as fh:
+        f = h5py.File(fh)
+        axis = lambda v: f[v][:] * float(f[v].attrs["scale_factor"][0]) + float(f[v].attrs["add_offset"][0])
+        x, y = axis("x"), axis("y")
+        col, row = (sx - x[0]) / (x[1] - x[0]), (sy - y[0]) / (y[1] - y[0])
+        d = f[var]
+        ch, cw = d.chunks
+        scale, offset, fill = (float(d.attrs[k][0]) for k in ("scale_factor", "add_offset", "_FillValue"))
+        r0, r1 = max(int(row.min()) - 4, 0) // ch, min(int(row.max()) + 4, d.shape[0] - 1) // ch
+        c0, c1 = max(int(col.min()) - 4, 0) // cw, min(int(col.max()) + 4, d.shape[1] - 1) // cw
+        jobs = [(r, c, d.id.get_chunk_info_by_coord((r * ch, c * cw))) for r in range(r0, r1 + 1) for c in range(c0, c1 + 1)]
+        shuffled = d.shuffle
+    out = np.full(((r1 - r0 + 1) * ch, (c1 - c0 + 1) * cw), np.nan, np.float32)
+
+    def get(job):
+        r, c, info = job
+        raw = np.frombuffer(zlib.decompress(fetch_range(url, info.byte_offset, info.size)), np.uint8)
+        if shuffled:
+            b = raw.reshape(2, -1)
+            raw = np.stack([b[0], b[1]], axis=1).reshape(-1)
+        v = raw.view("<i2").reshape(ch, cw).astype(np.float32)
+        v[v == fill] = np.nan
+        out[(r - r0) * ch:(r - r0 + 1) * ch, (c - c0) * cw:(c - c0 + 1) * cw] = v * scale + offset
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        list(pool.map(get, jobs))
+    v = np.nan_to_num(out)
+    return map_coordinates(gaussian_filter(v, blur) if blur else v, [row - r0 * ch, col - c0 * cw], order=1, mode="nearest")
 
 
 def fd_grid(fs, key):
@@ -282,7 +350,24 @@ class Imagery:
 
     def composite(self, fs, item):
         """(rgb uint8, cloud alpha uint8, daylight 0–1) for one scan."""
-        return self._compose(item[0], self.bands(fs, item))
+        return self._compose(item[0], self.bands(fs, item), self.detail(fs, item))
+
+    def detail(self, fs, item):
+        """The 0.5 km red band's detail as a ratio on the map grid (1 where there is none), cached.
+        None at night over the whole map, when the colors don't use it."""
+        t, token, _ = item
+        if solar_cos_zenith(t, self.lat, self.lon).max() < 0.03:
+            return None
+        path = CACHE / f"c02_{token}_{GRID_TAG}.npz"
+        if not path.exists():
+            d = pd.Timestamp(t, unit="s", tz="UTC")
+            keys = [k for h in (d - pd.Timedelta(hours=1), d) for k in fs.ls(f"{DETAIL_BUCKET}/{h:%Y/%j/%H}") if "M6C02" in k]
+            key = min(keys, key=lambda k: abs(scan_time(k.rsplit("/", 1)[-1].split("_")[3]).timestamp() + 60 - t))
+            hi = read_band(fs, key, "CMI", self.sx, self.sy, blur=0.8)
+            ratio = np.clip((hi + 0.01) / (gaussian_filter(hi, 1.0) + 0.01), 0.6, 1.6)
+            ratio = gaussian_filter(ratio, (0.7, 0)) ** 0.85
+            np.savez_compressed(path, ratio=ratio.astype(np.float16))
+        return np.load(path)["ratio"].astype(np.float32)
 
     def bands(self, fs, item):
         """The scan's four bands on the map grid, cached."""
@@ -312,11 +397,13 @@ class Imagery:
         r, n, b = (np.clip(refl[k] / 100, 0, 1.2) for k in ("C02", "C03", "C01"))
         return np.dstack([r, GREEN[0] * r + GREEN[1] * n + GREEN[2] * b, b]), sunz
 
-    def _compose(self, t, g):
+    def _compose(self, t, g, detail=None):
         mu0 = solar_cos_zenith(t, self.lat, self.lon)
         day = smoothstep(0.03, 0.22, mu0)[..., None]
         m = np.clip(mu0, 0.12, 1)
         lin, _ = self.day_linear(t, g)
+        if detail is not None:
+            lin = lin * detail[..., None]
         if GEOCOLOR_FIT.exists():
             from fit_geocolor import apply
             rgb = apply(json.loads(GEOCOLOR_FIT.read_text()), lin)
@@ -340,19 +427,39 @@ class Imagery:
         scans = list_scans(fs)
         print(f"{len(scans)} GOES-18 full-disk scans")
         CACHE.mkdir(parents=True, exist_ok=True)
+        # Fill the caches in worker processes first: h5py runs one HDF5 call at a time per process,
+        # so threads queued up reading each file's chunk index over the network.
+        with ProcessPoolExecutor(max_workers=os.cpu_count()) as pool:
+            for k, _ in enumerate(pool.map(prefetch, scans)):
+                if k % 25 == 0:
+                    print(f"  fetched {k}/{len(scans)}")
 
         def one(item):
             out = self.composite(fs, item)
             return item[0], out
 
         done = []
-        with ThreadPoolExecutor(max_workers=6) as pool:
+        with ThreadPoolExecutor(max_workers=8) as pool:
             for k, res in enumerate(pool.map(one, scans)):
                 done.append(res)
                 if k % 25 == 0:
                     print(f"  scan {k}/{len(scans)}")
         times = np.array([t for t, _ in done])
         return times, [o[0] for _, o in done], [np.repeat(o[1][..., None], 3, 2) for _, o in done], [o[2] for _, o in done]
+
+
+_worker = None
+
+
+def prefetch(item):
+    """One scan's bands and detail into the cache, in a worker process (see Imagery.load)."""
+    global _worker
+    if _worker is None:
+        _worker = Imagery.__new__(Imagery)  # only the grid; skips the Rayleigh tables
+        _worker.lon, _worker.lat, _worker.sx, _worker.sy = target_grid()
+        _worker.fs = s3fs.S3FileSystem(anon=True)
+    _worker.bands(_worker.fs, item)
+    _worker.detail(_worker.fs, item)
 
 
 def gshhs(face: str, edge: str, lw: float, borders: bool = False) -> np.ndarray:
@@ -372,12 +479,21 @@ def gshhs(face: str, edge: str, lw: float, borders: bool = False) -> np.ndarray:
     return rgba
 
 
+# The figure loads the smallest width that covers its map on the screen (VIDEO_WIDTHS in flight.json);
+# the full GRID_W is for 2× desktop screens, SMALL_W for phones and 1× screens.
+SMALL_W = 1080
+
+
 def render(style: str, frames, out: Path):
-    """Encode the frames (a generator of float RGB) to H.264 for the web."""
+    """Encode the frames (a generator of float RGB) to H.264 for the web, at GRID_W as out and at
+    SMALL_W beside it (out with -1080 before the extension), in one pass."""
+    small_h = 2 * round(SMALL_W * GRID_H / GRID_W / 2)
+    enc = ["-c:v", "libx264", "-crf", "27", "-preset", "slow", "-g", "12", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
     ffmpeg = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{GRID_W}x{GRID_H}",
-         "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-crf", "27", "-preset", "slow", "-g", "12",
-         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out)], stdin=subprocess.PIPE)
+         "-r", str(FPS), "-i", "-", "-filter_complex", f"[0:v]split=2[full][s];[s]scale={SMALL_W}:{small_h}:flags=lanczos[small]",
+         "-map", "[full]", *enc, str(out), "-map", "[small]", *enc, str(out.with_name(f"{out.stem}-{SMALL_W}{out.suffix}"))],
+        stdin=subprocess.PIPE)
     for k, img in enumerate(frames):
         ffmpeg.stdin.write((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8).tobytes())
         if k % 100 == 0:
@@ -470,7 +586,7 @@ def flight_json(track: Track, frame_t: np.ndarray, scan_t: np.ndarray) -> dict:
     gap_h = round((heard_again - before_dark) / 3600)
     labels = [
         {"t": 0, **pos(f[0, 0]), "marker": "launch", "lines": [["Launched from San Francisco, May 17", "lead"]], "short": [["Launch, May 17", "lead"]]},
-        {"t": stuck_t, **pos(stuck_t), "lines": [[f"GPS stuck at {clock(stuck_t)}", "lead"], [f"Line straight to the {clock(after_stuck)} fix", "muted"]],
+        {"t": stuck_t, **pos(stuck_t), "lines": [[f"GPS stuck at {clock(stuck_t)}", "lead"], ["Estimated from winds", "muted"]],
          "short": [[f"GPS stuck, {clock(stuck_t)}", "lead"]]},
         {"t": before_dark, **pos(before_dark), "side": "left", "lines": [[f"Last packet before dark, {clock(before_dark)}", "lead"], [f"Then silent for {gap_h} hours", "muted"]],
          "short": [[f"Silent from {clock(before_dark)}", "lead"], [f"for {gap_h} hours", "muted"]]},
@@ -486,6 +602,7 @@ def flight_json(track: Track, frame_t: np.ndarray, scan_t: np.ndarray) -> dict:
         "map": {"km": (X1 - X0) / 1000, "aspect": round(GRID_H / GRID_W, 5), "ocean": [to_uv(*p) for p in OCEAN]},
         "title": "Stratolink 3, May 17–19, 2026",
         "multiDay": True,
+        "video": {"widths": [SMALL_W, GRID_W]},
         "sources": {"geocolor": "NOAA GOES-18 full-disk imagery, with daytime colors matched to CIRA’s GeoColor and infrared at night; path through the gaps from the Stratolink dashboard’s wind reconstruction",
                     "map": "clouds from NOAA GOES-18 imagery; path through the gaps from the Stratolink dashboard’s wind reconstruction"},
         "events": {"lastPacket": {"t": last_packet, **pos(last_packet)}},
@@ -503,8 +620,16 @@ def flight_json(track: Track, frame_t: np.ndarray, scan_t: np.ndarray) -> dict:
     }
 
 
-def main(video: bool, test: bool):
+def main(video: bool, test: bool, backgrounds_only: bool = False):
     OUT.mkdir(parents=True, exist_ok=True)
+    if backgrounds_only:
+        # The published figure's frames, so its track and labels stay as they are.
+        f = json.loads((OUT / "flight.json").read_text())["frames"]
+        frame_t = np.append(np.arange(f["t0"], END.timestamp(), STEP_S), END.timestamp())
+        assert len(frame_t) == f["count"], (len(frame_t), f["count"])
+        times, sats, clouds, days = Imagery().load()
+        backgrounds(times, sats, clouds, days, frame_t)
+        return
     if test:
         img = Imagery()
         fs = s3fs.S3FileSystem(anon=True)
@@ -533,5 +658,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--json-only", action="store_true")
     parser.add_argument("--test", action="store_true")
+    parser.add_argument("--backgrounds-only", action="store_true")
     args = parser.parse_args()
-    main(video=not args.json_only, test=args.test)
+    main(video=not args.json_only, test=args.test, backgrounds_only=args.backgrounds_only)

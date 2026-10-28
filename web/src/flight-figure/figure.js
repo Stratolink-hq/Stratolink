@@ -1,10 +1,11 @@
 /* Flight figures for "Flights from a satellite view": a balloon's track drawn with D3 over
  * GOES-18 imagery, with a readout of its latest packet and a timeline to play or drag.
  * Each figure is a [data-chart=flight] element whose data-flight names a folder in
- * /assets/flights: flight.json and one background video per imagery style, one video frame
- * per data frame. The JSON (analysis/visualization/stratolink1_flight: export.py --public for
- * Stratolink 1, stratolink3.py for Stratolink 3, spain.py for its Spain leg) carries the track as runs of one kind
- * (gps, est, silent), the labels and when they appear, and the readout's rows.
+ * /assets/flights: flight.json and one background video per imagery style (at more than one
+ * width if flight.json lists them), one video frame per data frame, loaded as the figure nears
+ * view. The JSON (analysis/visualization/stratolink1_flight: export.py --public for Stratolink 1,
+ * stratolink3.py for Stratolink 3, spain.py for its Spain leg) carries the track as runs of one
+ * kind (gps, est, silent), the labels and when they appear, and the readout's rows.
  * Everything is drawn in screen pixels so labels stay readable at any width. A square map
  * sits beside the readout; a wide map, or one narrower than MIN_MAP, has it underneath. */
 import { bisectRight, drag, format, line, pointer, range, scaleLinear, select } from 'd3';
@@ -79,7 +80,7 @@ function mountFlight(host, signal) {
   const video = $('video'), panel = $('.flight-panel'), playButton = $('.flight-play'), mapBox = $('.flight-map');
   const svg = select($('.flight-overlay')), axisSvg = select($('.flight-axis'));
   const source = host.closest('figure')?.querySelector('[data-flight-source]');
-  let style = 'geocolor', playing = false, current = 0, data, render = () => {}, renderAxis = () => {};
+  let style = 'geocolor', playing = false, near = false, current = 0, data, render = () => {}, renderAxis = () => {};
   let clock, hourLabel, monthDay, hourOf, zone;
 
   fetch(`${assets}/flight.json`, { signal }).then(r => {
@@ -93,7 +94,16 @@ function mountFlight(host, signal) {
     $('.flight-rows').innerHTML = data.panel.map(key => `<div><dt>${ROWS[key]}</dt><dd data-row="${key}"></dd></div>`).join('');
     const observer = new ResizeObserver(layout);
     observer.observe(host);
-    signal.addEventListener('abort', () => { observer.disconnect(); video.pause(); video.removeAttribute('src'); });
+    // The background loads once the figure comes within a screen or so of view, not with the page.
+    const nearby = new IntersectionObserver(entries => {
+      if (!entries.some(e => e.isIntersecting)) return;
+      nearby.disconnect();
+      if (near) return;
+      near = true;
+      loadVideo(false);
+    }, { rootMargin: '100% 0px' });
+    nearby.observe(host);
+    signal.addEventListener('abort', () => { observer.disconnect(); nearby.disconnect(); video.pause(); video.removeAttribute('src'); });
     setStyle(style);
   }).catch(error => {
     if (error.name !== 'AbortError') host.textContent = 'The flight figure could not be loaded.';
@@ -101,16 +111,21 @@ function mountFlight(host, signal) {
 
   // ── layout ──
   let width = 0;
-  function layout() {
+  // The card's inner width, whether the map sits beside the readout, and the map's width.
+  function measure() {
     const cs = getComputedStyle(host);
     const w = host.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const beside = data.map.aspect > 0.85 && w - PANEL - GAP >= MIN_MAP;
+    return { w, beside, Sw: Math.floor(beside ? w - PANEL - GAP : w) };
+  }
+  function layout() {
+    const { w, beside, Sw } = measure();
     if (!w || w === width) return;
     width = w;
     const aspect = data.map.aspect;
-    const beside = aspect > 0.85 && w - PANEL - GAP >= MIN_MAP;
     host.classList.toggle('stacked', !beside);
     host.classList.toggle('strip', !beside && w >= 600);
-    const Sw = Math.floor(beside ? w - PANEL - GAP : w), Sh = Math.round(Sw * aspect);
+    const Sh = Math.round(Sw * aspect);
     host.classList.toggle('small-map', Sw < SMALL_MAP);
     mapBox.style.width = `${Sw}px`;
     mapBox.style.height = `${Sh}px`;
@@ -459,7 +474,21 @@ function mountFlight(host, signal) {
     if (source) source.textContent = `Source: Stratolink telemetry; ${data.sources[style]}.`;
     const wasPlaying = playing;
     if (playing) setPlaying(false);
-    video.src = `${assets}/background-${style}.mp4`;
+    if (near) loadVideo(wasPlaying);
+  }
+
+  // A figure with several video widths (data.video.widths; the widest is background-<style>.mp4,
+  // the others background-<style>-<width>.mp4) loads the narrowest that covers its map in screen pixels.
+  function videoFile() {
+    const widths = [...(data.video?.widths ?? [])].sort((a, b) => a - b);
+    if (widths.length < 2) return `background-${style}.mp4`;
+    const need = measure().Sw * (window.devicePixelRatio || 1);
+    const pick = widths.find(v => v >= need * 0.9) ?? widths[widths.length - 1];
+    return pick === widths[widths.length - 1] ? `background-${style}.mp4` : `background-${style}-${pick}.mp4`;
+  }
+
+  function loadVideo(wasPlaying) {
+    video.src = `${assets}/${videoFile()}`;
     // WebKit on iOS (Safari, and Chrome there too) stops after the metadata and never finishes the
     // seek, leaving the map blank, unless the load is asked for outright.
     video.load();
@@ -467,6 +496,11 @@ function mountFlight(host, signal) {
   }
 
   function setPlaying(on) {
+    if (on && !near) {  // played before it came into view (from the keyboard): load, then play
+      near = true;
+      loadVideo(true);
+      return;
+    }
     playing = on;
     host.classList.toggle('playing', on);
     playButton.setAttribute('aria-label', on ? 'Pause' : 'Play');
