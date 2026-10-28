@@ -18,8 +18,9 @@ receiver repeated one position from 11:22 a.m. to 6:23 p.m. CEST on May 28), fix
 apart are joined with straight lines, and longer gaps follow the reconstruction, straight across
 any stretch where it sits on a repeated position. Altitude comes from pressure.
 
-Window. From 18 hours before the first fix, on the reconstruction over the Atlantic, to the last
-fix near Málaga (the GPS only repeated it in the two hours of packets after).
+Window. From 5:00 a.m. CEST on May 28, before the first packet heard over Spain, on the reconstruction, to the last
+ping with a position, an hour after the last fix near Málaga; the GPS had frozen, and the line
+follows the reconstruction's frozen tail along the winds.
 
 Imagery. EUMETSAT's MTG GeoColour (Meteosat-12 FCI full disk, every 10 minutes) from the
 EUMETView WMS, in plate carrée, resampled onto the map. Scans (export.py) moves the clouds between
@@ -58,6 +59,9 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 OUT = REPO / "web" / "public" / "assets" / "flights" / "stratolink-3-spain"
 PRIVATE = HERE / "data" / "stratolink3_eu_telemetry.json"
+# A local compute's reconstruction with the frozen tail (the winds from the last fix to the last
+# ping); its tail is used only where the dashboard's reconstruction stops short of it.
+TAIL = HERE / "data" / "stratolink3_recon_tail.json"
 MTG_CACHE = CACHE.parent / "mtg_cache"  # a folder per WMS box
 SITE = "https://stratolink.org"
 DEVICE, ALIAS = "stratolink-3", "stratolink-3-eu"
@@ -68,22 +72,21 @@ END = pd.Timestamp("2026-05-29T20:15:00Z")
 # fix is 36 km on at 08:13, 17 m/s where the GPS read 4–5 m/s, and a GFS trajectory run back from
 # 08:13 passes within a few km of it around 05:40. The fix is drawn then, the packet stays at 07:38.
 FIRST_FIX_AT = pd.Timestamp("2026-05-28T05:40:00Z")
-LEAD_S = 18 * 3600  # the figure starts this long before the first fix, on the reconstruction, and ends at the last packet
+START_AT = pd.Timestamp("2026-05-28T03:00:00Z")  # the figure starts at 5:00 a.m. CEST, before the first packet over Spain  # the figure starts this long before the first fix, on the reconstruction, and ends at the last packet
 STEP_S, FPS = 300.0, 24
 GPS_GAP_S = 2 * 3600
 HEARD_S = 30 * 60
 TZ = ZoneInfo("Europe/Madrid")
 
-# Map: Lambert conformal from the Atlantic off Portugal to Málaga.
+# Map: Lambert conformal over western and southern Spain, the Portuguese coast to past Madrid.
 MAP_CRS = ccrs.LambertConformal(central_longitude=-5.6, central_latitude=38.75, standard_parallels=(37.0, 40.5))
-X0, X1, Y0, Y1 = -390_000, 230_000, -250_000, 300_000
+X0, X1, Y0, Y1 = -300_000, 300_000, -320_000, 300_000
 GRID_W = 1080
 GRID_H = 2 * round(GRID_W * (Y1 - Y0) / (X1 - X0) / 2)  # even, for H.264
 GEOD = pyproj.Geod(ellps="WGS84")
 
 CITIES = [("Madrid", 40.4168, -3.7038), ("Salamanca", 40.9701, -5.6635), ("Cáceres", 39.4753, -6.3724),
-          ("Seville", 37.3891, -5.9845), ("Córdoba", 37.8882, -4.7794), ("Málaga", 36.7213, -4.4214),
-          ("Granada", 37.1773, -3.5986), ("Badajoz", 38.8794, -6.9707)]
+          ("Seville", 37.3891, -5.9845), ("Córdoba", 37.8882, -4.7794), ("Málaga", 36.7213, -4.4214)]
 
 # WMS source grid (EPSG:4326), a little larger than the map.
 WMS = "https://view.eumetsat.int/geoserver/ows"
@@ -137,6 +140,10 @@ def fetch():
     r.raise_for_status()
     observed = r.json()["observed"]
     recon = pd.DataFrame(observed["reconstructed_track"])
+    if TAIL.exists():
+        tail = pd.DataFrame(json.loads(TAIL.read_text())["observed"]["reconstructed_track"])
+        end = pd.to_datetime(recon["time_utc"], utc=True, format="ISO8601").max()
+        recon = pd.concat([recon, tail[pd.to_datetime(tail["time_utc"], utc=True, format="ISO8601") > end]], ignore_index=True)
     recon["t"] = pd.to_datetime(recon["time_utc"], utc=True, format="ISO8601").map(lambda x: x.timestamp())
     return df, recon[["t", "lat", "lon"]].sort_values("t").to_numpy(), previous, bridge_start
 
@@ -194,6 +201,9 @@ class Track:
             elif len(moving):
                 pts += [tuple(p) for p in moving]
             pts.append((tb, lb, ob))
+        # After the last fix the GPS froze while packets kept coming; the reconstruction's tail
+        # follows the winds to the last ping.
+        pts += [tuple(p) for p in recon[recon[:, 0] > self.fixes[-1, 0] + 1]]
         self.pts = np.array(pts)
         p = df["pressure"].to_numpy(float)
         ok = ~np.isnan(p)
@@ -343,6 +353,10 @@ def backgrounds(times, sats, frame_t):
 
 # ── data ─────────────────────────────────────────────────────────────────────
 
+def located(gateways: list) -> list:
+    return [g for g in gateways if g.get("lat") is not None and g.get("lon") is not None]
+
+
 def flight_json(track: Track, frame_t: np.ndarray, scan_t: np.ndarray, previous: float | None) -> dict:
     nan = lambda v: None if v is None or (isinstance(v, float) and math.isnan(v)) else v
     frames = {k: [] for k in ("u", "v", "alt", "mode", "speed", "heading", "packet", "scan", "night", "status")}
@@ -380,7 +394,11 @@ def flight_json(track: Track, frame_t: np.ndarray, scan_t: np.ndarray, previous:
             segments[-1]["pts"].append(point)
 
     packets = [{"t": row.time.timestamp(), "temperature": nan(row.temperature), "lux": None, "uv": nan(row.uv_index),
-                "heardBy": len(row.gateways), "receivers": []} for row in track.packets.itertuples()]
+                "heardBy": len(row.gateways), "receivers": [to_uv(g["lon"], g["lat"]) for g in located(row.gateways)]}
+               for row in track.packets.itertuples()]
+    # The receivers that report a location (about a third: many in Spain don't); Packet Broker's
+    # forwarded receptions each carry the forwarding gateway's.
+    gateways = sorted({(round(g["lat"], 4), round(g["lon"], 4)) for row in track.packets.itertuples() for g in located(row.gateways)})
 
     f = track.fixes
     pos = lambda t: dict(zip(("u", "v"), to_uv(*track.at(t)[::-1])))
@@ -393,22 +411,24 @@ def flight_json(track: Track, frame_t: np.ndarray, scan_t: np.ndarray, previous:
     gap_h = round((heard_again - before_dark) / 3600)
     first_packet = track.packet_t[0]
     silent_days = round((first_packet - previous) / 86400) if previous else None
+    # Only where it was first and last heard end up on the map; the rest show while their stretch plays,
+    # so the map never carries more than a few at once; each is placed clear of the track and the
+    # lines to the receivers. The readout and timeline say the rest.
     labels = [
-        {"t": 0, **pos(frame_t[0]), "dy": 26, "lines": [["Off Portugal, May 27", "lead"], ["Estimated from winds", "muted"]],
-         "short": [["Off Portugal", "lead"]]},
-        {"t": f[0, 0], **pos(f[0, 0]), "marker": "launch", "side": "left", "dy": 18,
+        {"clear": True, "t": f[0, 0], "until": stuck_t, **pos(f[0, 0]), "marker": "launch", "side": "left", "dy": 18,
          "lines": [[f"Position at about {clock(f[0, 0])}", "lead"], ["Time estimated from winds", "muted"]],
          "short": [[f"About {clock(f[0, 0])}", "lead"], ["time estimated", "muted"]]},
-        {"t": first_packet, **pos(first_packet), "dy": 18,
-         "lines": [[f"Heard over Spain, {clock(first_packet)}", "lead"], [f"After {silent_days} days without a packet", "muted"]] if silent_days else [[f"Heard over Spain, {clock(first_packet)}", "lead"]],
-         "short": [[f"Heard, {clock(first_packet)}", "lead"]]},
-        {"t": stuck_t, **pos(stuck_t), "dy": -18, "lines": [[f"GPS stuck at {clock(stuck_t)}", "lead"], [f"Estimated from winds to the {clock(after_stuck)} fix", "muted"]],
+        # Off while the silent label, just east of it, is up; back for the last frame.
+        *({"clear": True, "t": t, "until": until, **pos(first_packet), "dy": 18, "lines": [[f"Heard over Spain, {clock(first_packet)}", "lead"]],
+           "short": [[f"Heard, {clock(first_packet)}", "lead"]]} for t, until in ((first_packet, before_dark), (heard_again, None))),
+        {"clear": True, "t": stuck_t, "until": after_stuck, **pos(stuck_t), "lines": [[f"GPS stuck at {clock(stuck_t)}", "lead"], ["Estimated from winds", "muted"]],
          "short": [[f"GPS stuck, {clock(stuck_t)}", "lead"]]},
-        {"t": before_dark, **pos(before_dark), "lines": [[f"Silent from {clock(before_dark)}", "lead"], [f"for {gap_h} hours", "muted"]],
-         "short": [[f"Silent {gap_h} h", "lead"], [f"from {clock(before_dark)}", "muted"]]},
-        {"t": mid, **pos(mid), "lines": [["Path estimated from winds", "muted"]], "short": [["Estimated from winds", "muted"]]},
-        {"t": heard_again, **pos(heard_again), "side": "left", "dy": -10, "lines": [["Heard again near Málaga", "lead"], [clock(heard_again, True), "muted"]],
+        {"clear": True, "t": before_dark, "until": heard_again, **pos(before_dark), "lines": [[f"Silent from {clock(before_dark)}", "lead"], ["Estimated from winds", "muted"]],
+         "short": [[f"Silent from {clock(before_dark)}", "lead"], ["Estimated from winds", "muted"]]},
+        {"clear": True, "t": heard_again, **pos(heard_again), "side": "left", "dy": -10, "lines": [["Heard again near Málaga", "lead"], [clock(heard_again, True), "muted"]],
          "short": [["Heard again", "lead"], [clock(heard_again), "muted"]]},
+        {"clear": True, "t": last_packet, **pos(last_packet), "side": "left", "lines": [[f"Last packet, {clock(last_packet)}", "lead"], ["Position estimated from winds", "muted"]],
+         "short": [["Last packet", "lead"], [clock(last_packet), "muted"]]},
     ]
     return {
         "map": {"km": (X1 - X0) / 1000, "aspect": round(GRID_H / GRID_W, 5), "ocean": []},
@@ -423,11 +443,11 @@ def flight_json(track: Track, frame_t: np.ndarray, scan_t: np.ndarray, previous:
         "statuses": statuses,
         "segments": segments,
         "labels": labels,
-        "axisNotes": [{"t": (frame_t[0] + f[0, 0]) / 2, "text": f"Unheard since {clock(previous, True)}" if previous else "Not heard yet", "short": "Unheard", "anchor": "middle", "cls": "muted"},
+        "axisNotes": [{"t": frame_t[0], "text": f"Unheard since {clock(previous, True)}" if previous else "Not heard yet", "short": "Unheard", "anchor": "start", "cls": "muted"},
                       {"t": mid, "text": f"{gap_h} hours without a packet", "short": f"{gap_h} h silent", "anchor": "middle", "cls": "muted"}],
         "fixes": [{"t": t, **dict(zip(("u", "v"), to_uv(lon, lat)))} for t, lat, lon in f],
         "packets": packets,
-        "gateways": [],
+        "gateways": [list(to_uv(lon, lat)) for lat, lon in gateways],
         "cities": [{"name": n, **dict(zip(("u", "v"), to_uv(lon, lat)))} for n, lat, lon in CITIES],
         "facts": {},
     }
@@ -436,13 +456,10 @@ def flight_json(track: Track, frame_t: np.ndarray, scan_t: np.ndarray, previous:
 def main(video: bool):
     OUT.mkdir(parents=True, exist_ok=True)
     df, recon, previous, bridge_start = fetch()
-    first_fix = df.dropna(subset=["lat", "lon"])["time"].iloc[0].timestamp()
-    # The figure ends at the last fix near Málaga: after it the GPS only repeated that position.
-    located = repair_split_fixes(df.dropna(subset=["lat", "lon"]))
-    moved = (located[["lat", "lon"]].diff().abs() > 1e-6).any(axis=1)
-    t1 = located["time"][moved].iloc[-1].timestamp()
-    df = df[df["time"].map(lambda x: x.timestamp()) <= t1].reset_index(drop=True)
-    frame_t = t1 - STEP_S * np.arange(math.ceil(LEAD_S / STEP_S + (t1 - first_fix) / STEP_S), -1, -1)  # the last frame is the last fix
+    # The figure ends at the last ping that carried a position, where the reconstruction's tail ends.
+    t1 = df.dropna(subset=["lat", "lon"])["time"].iloc[-1].timestamp()
+    df = df[df["time"].map(lambda x: x.timestamp()) <= t1 + 1].reset_index(drop=True)
+    frame_t = t1 - STEP_S * np.arange(math.floor((t1 - START_AT.timestamp()) / STEP_S), -1, -1)  # the last frame is the last ping
     t0 = float(frame_t[0])
     track = Track(df, recon, t0, bridge_start)
     print(f"{len(track.fixes)} fixes, {len(track.packets)} packets, {len(track.pts)} track points")
