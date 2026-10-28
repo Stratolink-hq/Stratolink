@@ -50,7 +50,7 @@ seen = set(); fx = []
 for f in fixes:
     key = (round(f['lat'], 4), round(f['lon'], 4)); distinct = key not in seen; seen.add(key)
     fx.append([round((ms(f['time_utc']) - t0) / 60000), r2(f['lat']), r2(f['lon']), 1 if distinct else 0])
-tr = [[round((ms(p['time_utc']) - t0) / 60000), r2(p['lat']), r2(p['lon'])] for p in track[::2]]
+tr = [[round((ms(p['time_utc']) - t0) / 60000), r2(p['lat']), r2(p['lon'])] for p in track[::2] + track[-1:] * (len(track) % 2 == 0)]   # keep the last point: the path ends at the last packet
 flight = {'t0': t0, 'fixes': fx, 'track': tr,
           'gap': {'tA': round((tA - t0) / 60000), 'tB': round((tB - t0) / 60000)},
           'end': round((ms(fixes[-1]['time_utc']) - t0) / 60000)}
