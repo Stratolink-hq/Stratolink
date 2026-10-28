@@ -40,8 +40,12 @@ import type { PathReconstructionResult } from './pathReconstruction';
  * v9: long-gap tube boxes are sized by a pilot particle cloud over each
  *     slice's read window, the cube carries a coarse outer wind field (.slwc
  *     v5) so particles that leave the fine box read real winds instead of being
- *     penalised, and gaps ≥ 48 h run 8,000 particles per filter. */
-const ALGO_VERSION = 'v9';
+ *     penalised, and gaps ≥ 48 h run 8,000 particles per filter.
+ * v10: frozen-GPS re-sends are dropped before reconstruction (only the first
+ *     packet of a run of identical positions is a fix), so a freeze is one gap
+ *     the wind bridges, not a parked balloon followed by a straight jump; and a
+ *     split fix (one coordinate stale) takes the fresh value from the next packet. */
+const ALGO_VERSION = 'v10';
 
 export type StoredHindcast = PathReconstructionResult & { computed_at: string };
 

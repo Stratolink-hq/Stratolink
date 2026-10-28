@@ -197,6 +197,52 @@ class MainTests(unittest.TestCase):
         self.assertIn("no devices to build", out.getvalue())
 
 
+class MissionFixesTests(unittest.TestCase):
+    """Split fixes are repaired and frozen-GPS re-sends dropped — the same set the
+    compute's repairSplitFixes + dropFrozenRepeats keep."""
+
+    def run_on(self, rows):
+        ns = base_namespace(supa=lambda table, params: rows, device_id_filter=lambda d: f"eq.{d}")
+        lift(["repair_split_fixes", "mission_fixes"], ns)
+        return [(f["t"], f["lat"], f["lon"]) for f in ns["mission_fixes"]("dev", "2026-05-28T00:00:00+00:00")]
+
+    @staticmethod
+    def at(minute):
+        return iso(datetime(2026, 5, 28, 8, 0, tzinfo=timezone.utc) + timedelta(minutes=minute))
+
+    def test_repeats_keep_the_first_packet_of_each_run(self):
+        rows = [
+            {"time": self.at(0), "lat": 40.0, "lon": -6.0}, {"time": self.at(1), "lat": 40.0, "lon": -6.0},
+            {"time": self.at(2), "lat": 40.0, "lon": -6.0}, {"time": self.at(3), "lat": 40.1, "lon": -5.9},
+            {"time": self.at(4), "lat": 40.1, "lon": -5.8}, {"time": self.at(5), "lat": 40.1, "lon": -5.8},
+        ]
+        self.assertEqual(self.run_on(rows), [(self.at(0), 40.0, -6.0), (self.at(3), 40.1, -5.9), (self.at(4), 40.1, -5.8)])
+
+    def test_garbage_between_repeats_does_not_break_a_run(self):
+        rows = [
+            {"time": self.at(0), "lat": 40.0, "lon": -6.0}, {"time": self.at(1), "lat": -222.0, "lon": -6.0},
+            {"time": self.at(2), "lat": 40.0, "lon": -6.0}, {"time": self.at(3), "lat": 40.0, "lon": -5.9},
+        ]
+        self.assertEqual(self.run_on(rows), [(self.at(0), 40.0, -6.0), (self.at(3), 40.0, -5.9)])
+
+    def test_split_fix_takes_the_stale_coordinate_from_the_next_packet(self):
+        at = self.at
+        rows = [  # lon moved, lat stale at 08:05; lat catches up at 08:10 (the stratolink-3 17:09/17:14 shape)
+            {"time": at(0), "lat": 40.6, "lon": -5.4}, {"time": at(5), "lat": 40.6, "lon": -5.3},
+            {"time": at(10), "lat": 40.5, "lon": -5.3}, {"time": at(15), "lat": 40.5, "lon": -5.3},
+        ]
+        self.assertEqual(self.run_on(rows), [(at(0), 40.6, -5.4), (at(5), 40.5, -5.3)])
+
+    def test_split_fix_is_left_alone_when_the_next_packet_is_late_or_does_not_complete_it(self):
+        at = self.at
+        late = [{"time": at(0), "lat": 40.6, "lon": -5.4}, {"time": at(5), "lat": 40.6, "lon": -5.3},
+                {"time": at(60), "lat": 40.5, "lon": -5.3}]
+        self.assertEqual(self.run_on(late), [(at(0), 40.6, -5.4), (at(5), 40.6, -5.3), (at(60), 40.5, -5.3)])
+        no_completion = [{"time": at(0), "lat": 40.6, "lon": -5.4}, {"time": at(5), "lat": 40.6, "lon": -5.3},
+                         {"time": at(10), "lat": 40.6, "lon": -5.3}]
+        self.assertEqual(self.run_on(no_completion), [(at(0), 40.6, -5.4), (at(5), 40.6, -5.3)])
+
+
 class CubeSpanTests(unittest.TestCase):
     """Reconstruction span, single-fix skip, tube-before-recon field reuse."""
 

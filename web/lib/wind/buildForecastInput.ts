@@ -1,7 +1,7 @@
 import { createServiceRoleClient } from '@/lib/supabase';
 import { fetchTelemetryMerged } from '@/lib/telemetry/fetchMergedTelemetry';
 import { telemetrySinceIso, type MissionWindowDevice } from '@/lib/telemetry/missionWindow';
-import { splitTrackSegments } from '@/lib/wind/trackSegments';
+import { dropFrozenRepeats, repairSplitFixes, splitTrackSegments } from '@/lib/wind/trackSegments';
 import type { MonteCarloForecastInput } from '@/lib/wind/forecastTypes';
 
 const TELEMETRY_COLUMNS = 'time, lat, lon, altitude_m, pressure';
@@ -92,7 +92,7 @@ export async function buildForecastInputForDevice(
     const validCoord = (lat: unknown, lon: unknown): boolean =>
         typeof lat === 'number' && typeof lon === 'number' &&
         Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
-    let observedTrack = rows
+    let observedTrack = repairSplitFixes(rows
         .filter((r) => validCoord(r.lat, r.lon))
         .map((r) => ({
             lat: r.lat as number,
@@ -100,7 +100,7 @@ export async function buildForecastInputForDevice(
             t: r.time as string,
             alt_m: (r.altitude_m as number | null) ?? undefined,
             pressure_hpa: floatPressure(r.pressure),
-        }));
+        })));
 
     if (observedTrack.length < 1) {
         if (!hasLaunchRecord) return null;
@@ -139,6 +139,10 @@ export async function buildForecastInputForDevice(
               }
             : { lat: first.lat, lon: first.lon, time_utc: first.t };
 
+    /* The freeze split (and the drawn track) needs the repeats; the fixes the
+     * reconstruction and forecast start from must not have them. */
+    const fixes = dropFrozenRepeats(observedTrack);
+
     const segments = splitTrackSegments(
         observedTrack.map((p) => ({ lat: p.lat, lon: p.lon, t: new Date(p.t).getTime() })),
     );
@@ -151,7 +155,7 @@ export async function buildForecastInputForDevice(
         deviceId,
         mission: device.launcher_name ?? deviceId,
         launch,
-        gpsFixes: observedTrack.map((p) => ({
+        gpsFixes: fixes.map((p) => ({
             lat: p.lat,
             lon: p.lon,
             time_utc: p.t,
