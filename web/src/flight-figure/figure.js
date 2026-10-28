@@ -108,7 +108,8 @@ function mountFlight(host, signal) {
     mapBox.style.width = `${Sw}px`;
     mapBox.style.height = `${Sh}px`;
     drawMap(Sw, Sh);
-    drawAxis(w - playButton.offsetWidth - 12, w < 600);
+    const scrubber = $('.flight-scrubber'), ss = getComputedStyle(scrubber);
+    drawAxis(scrubber.clientWidth - parseFloat(ss.paddingLeft) - parseFloat(ss.paddingRight) - playButton.offsetWidth - 12, w < 600);
     fixWidths();
     render(current);
   }
