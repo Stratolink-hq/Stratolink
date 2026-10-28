@@ -4,6 +4,8 @@
  *   - repairSplitFixes: a packet whose lon moved but lat did not takes the
  *     latitude of the next packet (≤ 15 min later) when that packet changes it
  *   - dropFrozenRepeats: only the first packet of a run of identical positions
+ * and appendFrozenTail (lib/wind/pathReconstruction.ts): the wind drift from the
+ * last fix to the last frozen ping.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -60,4 +62,45 @@ test('repairSplitFixes does not touch fixes where both coordinates moved, nor mu
     const copy = structuredClone(track);
     assert.deepEqual(repairSplitFixes(track), copy);
     assert.deepEqual(track, copy);
+});
+
+/* ── appendFrozenTail (lib/wind/pathReconstruction.ts) ─────────────────── */
+
+const HOUR = 3_600_000;
+/** Uniform wind (m/s) over a 1° box from −10…50° lat/lon, hourly slices from t = 0. */
+function uniformCube(u, v, slices) {
+    const grid = () => ({ lat0: -10, dLat: 1, nLat: 61, lon0: -10, dLon: 1, nLon: 61, U: new Float32Array(61 * 61).fill(u), V: new Float32Array(61 * 61).fill(v) });
+    return {
+        t0Ms: 0, stepMs: HOUR, gridStep: 1, levelHpa: 300, isTube: false, source: 'test',
+        bounds: { latMin: -10, latMax: 50, lonMin: -10, lonMax: 50 },
+        grids: Array.from({ length: slices }, grid),
+    };
+}
+const lastFix = { lat: 10, lon: 10, time_utc: new Date(0).toISOString() };
+const recon = () => ({
+    reconstructed_path: [[9, 10], [10, 10]],
+    reconstructed_track: [{ lon: 9, lat: 10, time_utc: new Date(-HOUR).toISOString() }, { lon: 10, lat: 10, time_utc: lastFix.time_utc }],
+    gap_bridges: [], gaps: [], compute_ms: 0,
+});
+
+test('appendFrozenTail drifts with the wind from the last fix to the last ping', async () => {
+    const { appendFrozenTail } = await import('../lib/wind/pathReconstruction.ts');
+    const until = 70 * 60_000;                                   // 1 h 10 min of frozen pings
+    const out = appendFrozenTail(recon(), lastFix, until, uniformCube(10, 0, 4), 280);
+    const tail = out.reconstructed_track.slice(2);
+    assert.equal(tail.length, 7);                                // 10-min steps, the last one ends on the ping
+    assert.equal(tail.at(-1).time_utc, new Date(until).toISOString());
+    const expectLon = 10 + (10 * 4200) / (111_320 * Math.cos((10 * Math.PI) / 180));
+    assert.ok(Math.abs(tail.at(-1).lon - expectLon) < 2e-4, `${tail.at(-1).lon} vs ${expectLon}`);
+    assert.equal(tail.at(-1).lat, 10);
+    assert.deepEqual(out.reconstructed_path.at(-1), [tail.at(-1).lon, tail.at(-1).lat]);
+    assert.deepEqual(out.frozen_tail, { from_utc: lastFix.time_utc, until_utc: new Date(until).toISOString(), reached_utc: tail.at(-1).time_utc });
+});
+
+test('appendFrozenTail stops where the cube ends and leaves a ping-less flight alone', async () => {
+    const { appendFrozenTail } = await import('../lib/wind/pathReconstruction.ts');
+    const short = appendFrozenTail(recon(), lastFix, 5 * HOUR, uniformCube(10, 0, 3), 280);   // slices 0–2 h
+    assert.equal(short.frozen_tail.reached_utc, new Date(2 * HOUR).toISOString());
+    const none = recon();
+    assert.equal(appendFrozenTail(none, lastFix, 30_000, uniformCube(10, 0, 3), 280), none);   // ping within a minute
 });

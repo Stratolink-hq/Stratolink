@@ -15,3 +15,19 @@ export function flightTrack(rows: Array<{ lat: number | null; lon: number | null
         return !previous || !next || !(speed(previous, point) > 120 && speed(point, next) > 120 && speed(previous, next) < 120);
     });
 }
+
+/** Packets that each mark a new GPS position: flightTrack, then the May 2026
+ *  firmware's two GPS faults undone, as the forecast pipeline does
+ *  (repairSplitFixes / dropFrozenRepeats in lib/wind/trackSegments.ts). A packet
+ *  whose lon moved but lat did not carries a stale latitude, which the next
+ *  packet (≤ 15 min later) supplies; a packet at exactly the previous position
+ *  is a frozen GPS re-sending its last fix, not a measurement, so only the
+ *  first of each run is kept. */
+export function gpsFixes(rows: Array<{ lat: number | null; lon: number | null; t: number }>): TimedPosition[] {
+    const track = flightTrack(rows).map(p => ({ ...p }));
+    for (let i = 1; i < track.length - 1; i++) {
+        const [a, b, c] = [track[i - 1], track[i], track[i + 1]];
+        if (c.t - b.t <= 15 * 60_000 && b.lat === a.lat && b.lon !== a.lon && c.lat !== b.lat) b.lat = c.lat;
+    }
+    return track.filter((p, i) => i === 0 || p.lat !== track[i - 1].lat || p.lon !== track[i - 1].lon);
+}

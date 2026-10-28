@@ -417,12 +417,23 @@ def mission_fixes(device, since_iso):
     # A packet at exactly the previous fix's lat/lon is a frozen-GPS re-send, not a
     # fix — keep the first of each run (mirrors dropFrozenRepeats in
     # lib/wind/trackSegments.ts, so the cube's gaps and last fix match the compute's).
+    # Each kept fix records the last packet of its run as "until": after the last
+    # fix that is the last ping, which the compute's frozen tail reaches.
     out = []
     for f in repair_split_fixes(packets):
         if out and f["lat"] == out[-1]["lat"] and f["lon"] == out[-1]["lon"]:
+            out[-1]["until"] = f["t"]
             continue
         out.append(f)
     return out
+
+
+def recon_end(fixes):
+    """End of the reconstruction cube: two steps past the last fix, or past the
+    last ping when frozen-GPS repeats followed it (appendFrozenTail in
+    lib/wind/pathReconstruction.ts integrates up to that ping)."""
+    last = max(tparse(fixes[-1]["t"]), tparse(fixes[-1].get("until") or fixes[-1]["t"]))
+    return floor_step(last, RECON_STEP_H) + timedelta(hours=2 * RECON_STEP_H)
 
 
 def mission_track(device, launched_at):
@@ -1187,7 +1198,7 @@ def build_tube_recon(device, fixes, target_p, latest, now):
     last_fix = tparse(fixes[-1]["t"])
     step_ms = RECON_STEP_H * 3600 * 1000
     start = floor_step(first_fix, RECON_STEP_H) - timedelta(hours=RECON_STEP_H)
-    end = floor_step(last_fix, RECON_STEP_H) + timedelta(hours=2 * RECON_STEP_H)
+    end = recon_end(fixes)
     start_ms = int(start.timestamp() * 1000)
     n_slices = int(round((end - start).total_seconds() * 1000 / step_ms)) + 1
     slice_ms = [start_ms + k * step_ms for k in range(n_slices)]
@@ -1338,28 +1349,29 @@ def build_cube(device, fixes, target_p, latest):
         build_static_fc(device, fixes, last_fix, gap_h, target_p, latest, now)
 
     # ── Reconstruction cube: full mission (first fix → last fix), 3-hourly. ──
-    # Nothing after the last fix is ever sampled (the bridges run fix → fix), so
-    # the span ends there, not at now + horizon — which for a long-dark balloon put
+    # Nothing after the last fix is sampled except the frozen tail up to the last
+    # ping (the bridges run fix → fix), so the span ends there (recon_end), not at
+    # now + horizon — which for a long-dark balloon put
     # ~90% of the grids on a period with no fixes. One fix (or a launch-record
     # seed) has no gap to bridge: write nothing; compute keys devices on the fc cube.
     # Default is the trajectory tube (build_tube_recon); the static box is the
     # RECON_TUBE=0 legacy path. Either way, the fields the forecast tube already
     # fetched inside the recon's span stay warm across the cache clear.
     recon_start = floor_step(first_fix, RECON_STEP_H) - timedelta(hours=RECON_STEP_H)
-    recon_end = floor_step(last_fix, RECON_STEP_H) + timedelta(hours=2 * RECON_STEP_H)
+    recon_stop = recon_end(fixes)
     if len(fixes) < 2:
         print(f"    recon: skipped ({len(fixes)} fix — nothing to reconstruct)", flush=True)
     elif os.environ.get("SKIP_RECON") == "1":   # dev: skip the slow full-mission recon when iterating on the tube
         print("    recon: skipped (SKIP_RECON=1)", flush=True)
     elif RECON_TUBE:
-        clear_field_cache(keep=fields_for(recon_start, recon_end, RECON_STEP_H, latest))  # tube's overlap stays warm
+        clear_field_cache(keep=fields_for(recon_start, recon_stop, RECON_STEP_H, latest))  # tube's overlap stays warm
         build_tube_recon(device, fixes, target_p, latest, now)
         clear_field_cache()
     else:
         recon_bounds = bounds_for_forecast(fixes, HORIZON_H, pad_cap=8)
         recon_step = choose_grid_step(recon_bounds)
-        clear_field_cache(keep=fields_for(recon_start, recon_end, RECON_STEP_H, latest))  # tube's overlap stays warm
-        recon, rla, rlo = sample_grids(recon_bounds, recon_step, recon_start, recon_end,
+        clear_field_cache(keep=fields_for(recon_start, recon_stop, RECON_STEP_H, latest))  # tube's overlap stays warm
+        recon, rla, rlo = sample_grids(recon_bounds, recon_step, recon_start, recon_stop,
                                        RECON_STEP_H, target_p, latest, now, "recon")
         write_cube(device, "", recon, rla, rlo, "recon")
         del recon

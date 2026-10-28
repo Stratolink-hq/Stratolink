@@ -113,10 +113,21 @@ export function projectedPosition(lastFix: TimedPoint, legs: ForecastLegs, time:
     return pos ? { lat: pos[1], lon: wrapLon(pos[0]) } : null;
 }
 
-/** Time of the latest row with a position, or null. */
+/** Time of the latest GPS fix, or null: the latest row with a position, moved
+ *  back to the first of any run of packets repeating that exact position (a
+ *  frozen GPS re-sends its last fix, so the repeats are not new fixes). */
 export function lastFixTime(rows: ReadonlyArray<{ t: number; lat: number | null; lon: number | null }>): number | null {
-    for (let i = rows.length - 1; i >= 0; i--) if (rows[i].lat != null && rows[i].lon != null) return rows[i].t;
-    return null;
+    let i = rows.length - 1;
+    while (i >= 0 && (rows[i].lat == null || rows[i].lon == null)) i--;
+    if (i < 0) return null;
+    const { lat, lon } = rows[i];
+    let first = i;
+    for (let j = i - 1; j >= 0; j--) {
+        if (rows[j].lat == null || rows[j].lon == null) continue;
+        if (rows[j].lat !== lat || rows[j].lon !== lon) break;
+        first = j;
+    }
+    return rows[first].t;
 }
 
 /** The stretch a balloon is estimated to have flown since its last fix, up to

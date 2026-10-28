@@ -101,6 +101,9 @@ export type StratolinkForecast = {
         reconstructed_track?: Array<{ lon: number; lat: number; time_utc: string }>;
         /** Per-gap bridge segments (non-trivial gaps only). */
         gap_bridges?: Array<Array<[number, number]>>;
+        /** The wind-estimated stretch at the end of the reconstructed track,
+         *  from the last fix to the last ping (frozen-GPS repeats). */
+        frozen_tail?: { from_utc: string; until_utc: string; reached_utc: string };
         /** Hash of the reconstruction inputs (fixes + level) — lets the cache
          *  reuse an unchanged hindcast instead of recomputing it. */
         reconstruction_input_hash?: string;
@@ -174,6 +177,10 @@ export type MonteCarloForecastInput = {
     /** Pressure/altitude samples during GPS gaps (baro continued). */
     baroSamples?: Array<{ time_utc: string; alt_m: number }>;
     pressureHpa: number;
+    /** Time of the last packet with a position, frozen-GPS repeats included.
+     *  Later than the last fix when the GPS froze before the balloon went
+     *  silent; the reconstruction then carries the path on to it. */
+    lastPingUtc?: string;
     forecastHours?: number;
     nEnsemble?: number;
 };
