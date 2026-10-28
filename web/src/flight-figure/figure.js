@@ -411,6 +411,9 @@ function mountFlight(host, signal) {
     const wasPlaying = playing;
     if (playing) setPlaying(false);
     video.src = `${assets}/background-${style}.mp4`;
+    // WebKit on iOS (Safari, and Chrome there too) stops after the metadata and never finishes the
+    // seek, leaving the map blank, unless the load is asked for outright.
+    video.load();
     video.addEventListener('loadedmetadata', () => { render(current); seek(current).then(() => wasPlaying && setPlaying(true)); }, { once: true });
   }
 
