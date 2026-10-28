@@ -137,15 +137,24 @@
   .post-figure.wide:has(> [data-chart=flight]) { width: calc(100% + 40px); margin-left: -20px; }
   .post-figure.wide > [data-chart=flight] { display: flex; flex-direction: column; padding: 16px 8px 10px; border-radius: 0; }
   .post-figure.wide:has(> [data-chart=flight]) > figcaption { padding: 0 20px; }
-  [data-chart=flight] .chart-heading { margin-bottom: 12px; padding: 0 12px; }
+  [data-chart=flight] .chart-heading { gap: 8px; margin-bottom: 12px; padding: 0 12px; }
+  .flight-imagery button { padding-inline: 10px; }
   [data-chart=flight].stacked .flight-body { display: contents; }
   [data-chart=flight] .flight-scrubber { order: 1; margin-top: 10px; padding: 0 4px 0 12px; }
   [data-chart=flight].stacked .flight-panel {
     order: 2; display: grid; grid-template-columns: 1fr auto auto; align-items: end; column-gap: 18px;
     margin-top: 8px; padding: 0 12px;
   }
-  [data-chart=flight].stacked .flight-now, [data-chart=flight].stacked .flight-heroes { display: contents; }
-  [data-chart=flight].stacked .flight-time, [data-chart=flight].stacked .flight-heroes > div { grid-row: 1; }
+  /* The zone sits over the time like a caption, level with the two big numbers' captions. */
+  [data-chart=flight].stacked .flight-now, [data-chart=flight].stacked .flight-time,
+  [data-chart=flight].stacked .flight-heroes, [data-chart=flight].stacked .flight-heroes > div { display: contents; }
+  [data-chart=flight].stacked .flight-time .tz, [data-chart=flight].stacked .flight-heroes .cap { grid-row: 1; }
+  [data-chart=flight].stacked .flight-time .time, [data-chart=flight].stacked .flight-heroes .num { grid-row: 2; }
+  [data-chart=flight].stacked .flight-time > span { grid-column: 1; justify-self: start; }
+  [data-chart=flight].stacked .flight-heroes > div:first-child > * { grid-column: 2; }
+  [data-chart=flight].stacked .flight-heroes > div:last-child > * { grid-column: 3; }
+  [data-chart=flight].stacked .flight-time .tz { white-space: nowrap; }
+  [data-chart=flight].stacked .flight-time .time { text-align: left; }
   [data-chart=flight].stacked .flight-status, [data-chart=flight].stacked .flight-rows,
   [data-chart=flight].stacked .flight-foot { grid-column: 1 / -1; }
   [data-chart=flight].stacked .flight-time .time, [data-chart=flight].stacked .flight-heroes .num > span:first-child { font-size: 23px; }

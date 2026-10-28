@@ -3,33 +3,38 @@
  * Each figure is a [data-chart=flight] element whose data-flight names a folder in
  * /assets/flights: flight.json and one background video per imagery style, one video frame
  * per data frame. The JSON (analysis/visualization/stratolink1_flight: export.py --public for
- * Stratolink 1, stratolink3.py for Stratolink 3) carries the track as runs of one kind
+ * Stratolink 1, stratolink3.py for Stratolink 3, spain.py for its Spain leg) carries the track as runs of one kind
  * (gps, est, silent), the labels and when they appear, and the readout's rows.
  * Everything is drawn in screen pixels so labels stay readable at any width. A square map
  * sits beside the readout; a wide map, or one narrower than MIN_MAP, has it underneath. */
 import { bisectRight, drag, format, line, pointer, range, scaleLinear, select } from 'd3';
 
-const TZ = 'America/Los_Angeles';
 const PANEL = 220, GAP = 20, MIN_MAP = 460, SMALL_MAP = 500;
 const PACKET_S = 0.7;  // how long, in playback seconds, a packet's receiver lines stay up
 const ROWS = { speed: 'Speed', clouds: 'Clouds', sun: 'Sunlight', uv: 'UV index', heard: 'Heard by' };
 
 // ── formatting (AP style) ────────────────────────────────────────────────────
 
-const clockParts = new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' });
-const parts = t => Object.fromEntries(clockParts.formatToParts(new Date(t * 1000)).map(p => [p.type, p.value]));
-function clock(t) {
-  const p = parts(t);
-  if (p.hour === '12' && p.minute === '00' && p.dayPeriod === 'PM') return 'noon';
-  return `${p.hour}:${p.minute} ${p.dayPeriod === 'AM' ? 'a.m.' : 'p.m.'}`;
+// Clock helpers in the figure's time zone (flight.json's tz, Pacific by default); zoneName, if
+// given, stands in for the browser's own abbreviation, which is "GMT+2" for much of the world.
+function timeFormat(timeZone = 'America/Los_Angeles', zoneName) {
+  const clockParts = new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' });
+  const parts = t => Object.fromEntries(clockParts.formatToParts(new Date(t * 1000)).map(p => [p.type, p.value]));
+  return {
+    clock(t) {
+      const p = parts(t);
+      if (p.hour === '12' && p.minute === '00' && p.dayPeriod === 'PM') return 'noon';
+      return `${p.hour}:${p.minute} ${p.dayPeriod === 'AM' ? 'a.m.' : 'p.m.'}`;
+    },
+    hourLabel(t) {
+      const p = parts(t);
+      return p.hour === '12' && p.dayPeriod === 'PM' ? 'Noon' : `${p.hour} ${p.dayPeriod === 'AM' ? 'a.m.' : 'p.m.'}`;
+    },
+    monthDay: t => { const p = parts(t); return `${p.month === 'May' ? 'May' : `${p.month}.`} ${p.day}`; },
+    hourOf: t => { const p = parts(t); return (Number(p.hour) % 12) + (p.dayPeriod === 'PM' ? 12 : 0); },
+    zone: t => zoneName || parts(t).timeZoneName,
+  };
 }
-function hourLabel(t) {
-  const p = parts(t);
-  return p.hour === '12' && p.dayPeriod === 'PM' ? 'Noon' : `${p.hour} ${p.dayPeriod === 'AM' ? 'a.m.' : 'p.m.'}`;
-}
-const monthDay = t => { const p = parts(t); return `${p.month === 'May' ? 'May' : `${p.month}.`} ${p.day}`; };
-const hourOf = t => { const p = parts(t); return (Number(p.hour) % 12) + (p.dayPeriod === 'PM' ? 12 : 0); };
-const zone = t => parts(t).timeZoneName;
 const minus = s => String(s).replace('-', '−');
 const compass = deg => 'N NNE NE ENE E ESE SE SSE S SSW SW WSW W WNW NW NNW'.split(' ')[Math.round((deg % 360) / 22.5) % 16];
 const thousands = format(',.0f');
@@ -75,12 +80,14 @@ function mountFlight(host, signal) {
   const svg = select($('.flight-overlay')), axisSvg = select($('.flight-axis'));
   const source = host.closest('figure')?.querySelector('[data-flight-source]');
   let style = 'geocolor', playing = false, current = 0, data, render = () => {}, renderAxis = () => {};
+  let clock, hourLabel, monthDay, hourOf, zone;
 
   fetch(`${assets}/flight.json`, { signal }).then(r => {
     if (!r.ok) throw new Error('Figure data unavailable');
     return r.json();
   }).then(json => {
     data = json;
+    ({ clock, hourLabel, monthDay, hourOf, zone } = timeFormat(data.tz, data.zoneName));
     current = data.frames.count - 1;
     $('.flight-title').textContent = data.title;
     $('.flight-rows').innerHTML = data.panel.map(key => `<div><dt>${ROWS[key]}</dt><dd data-row="${key}"></dd></div>`).join('');
