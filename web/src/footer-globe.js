@@ -8,11 +8,12 @@ const warmth = document.querySelector('.scene-warmth');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const portal = document.createElement('div');
 portal.className = 'footer-globe-portal';
-portal.innerHTML = `<iframe title="Stratolink fleet globe" tabindex="-1" aria-hidden="true"></iframe>
+portal.innerHTML = `<div class="footer-globe-position"><iframe title="Stratolink fleet globe" tabindex="-1" aria-hidden="true"></iframe></div>
   <a class="footer-globe-trigger" href="/dashboard" aria-label="Explore the balloon dashboard" title="Explore dashboard"></a>
   <div class="footer-globe-credit"><a href="https://www.mapbox.com/" aria-label="Mapbox"><img src="/assets/mapbox-attribution.svg" width="62" height="17" alt="Mapbox"></a><details class="footer-globe-attribution"><summary aria-label="Map attribution"><svg viewBox="0 0 ${faCircleInfo.icon[0]} ${faCircleInfo.icon[1]}" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="${faCircleInfo.icon[4]}"/></svg></summary><div><a href="https://www.mapbox.com/about/maps/">© Mapbox</a><a href="https://www.openstreetmap.org/copyright">© OpenStreetMap</a><a href="https://apps.mapbox.com/feedback/">Improve this map</a></div></details></div>`;
 document.body.append(portal);
 const frame = portal.querySelector('iframe');
+const position = portal.querySelector('.footer-globe-position');
 const trigger = portal.querySelector('.footer-globe-trigger');
 const credit = portal.querySelector('.footer-globe-credit');
 frame.inert = true;
@@ -75,11 +76,11 @@ function writeGlobeProgram() {
   const frames = (body) => scrolls.map(scroll => `${(100 * scroll / g.maxScroll).toFixed(4)}% { ${body(globeAt(g, scroll))} }`).join('\n');
   const timeline = `animation-timeline: scroll(root block); animation-range: 0px ${px(g.maxScroll)};`;
   program.textContent = `
-@keyframes globe-frame { ${frames(a => `transform: translate3d(${px(g.x - g.W / 2)}, ${px(a.y + a.lift - g.H / 2)}, 0) scale(${a.scale.toFixed(5)}) scale(var(--globe-hover-scale)); opacity: ${a.reveal.toFixed(4)}`)} }
+@keyframes globe-frame { ${frames(a => `transform: translate3d(${px(g.x - g.W / 2)}, ${px(a.y + a.lift - g.H / 2)}, 0) scale(${a.scale.toFixed(5)}); opacity: ${a.reveal.toFixed(4)}`)} }
 @keyframes globe-clip { ${frames(a => `clip-path: inset(${px(a.clip)} 0px 0px 0px)`)} }
 @keyframes globe-trigger { ${frames(a => `transform: translate3d(${px(g.x - g.diameter / 2)}, ${px(a.y - g.diameter / 2)}, 0)`)} }
 @keyframes globe-credit { ${frames(a => `transform: translateY(${px(a.credit)})`)} }
-.footer-globe-portal iframe { animation: globe-frame linear both; ${timeline} }
+.footer-globe-position { animation: globe-frame linear both; ${timeline} }
 .footer-globe-portal { animation: globe-clip linear both; ${timeline} }
 .footer-globe-trigger { animation: globe-trigger linear both; ${timeline} }
 .footer-globe-credit { animation: globe-credit linear both; ${timeline} }
@@ -123,7 +124,7 @@ function place() {
   const reveal = reduced.matches ? 1 : progress * progress * (3 - 2 * progress);
   const lift = reduced.matches ? 0 : (1 - reveal) * 18;
   const scale = diameter / (Math.min(innerWidth, innerHeight) * .82) * (.985 + reveal * .015);
-  frame.style.transform = `translate3d(${x - innerWidth / 2}px, ${y + lift - innerHeight / 2}px, 0) scale(${scale}) scale(var(--globe-hover-scale))`;
+  position.style.transform = `translate3d(${x - innerWidth / 2}px, ${y + lift - innerHeight / 2}px, 0) scale(${scale})`;
   portal.style.setProperty('--globe-reveal', reveal);
   if (!mobile) { // Only the desktop warmth gradient reads these.
     warmth.style.setProperty('--globe-x', `${x}px`);
@@ -149,15 +150,17 @@ function enter(event) {
   if (!ready) return; // The real dashboard link remains a usable fallback.
   event?.preventDefault();
   footerScroll = scrollY;
-  const start = getComputedStyle(frame).transform;
+  // Preserve the exact hovered size when handing off to the dashboard animation.
+  const start = new DOMMatrix(getComputedStyle(position).transform)
+    .multiply(new DOMMatrix(getComputedStyle(frame).transform)).toString();
   stage = 'entering';
   portal.dataset.stage = stage;
   writeGlobeProgram(); // stage left 'footer': removes the scroll-timeline keyframes so inline styles and the animation below apply
   portal.style.clipPath = 'none';
   document.documentElement.classList.add('globe-navigation');
   home.inert = true; footer.inert = true; header.inert = true;
-  frame.style.transform = 'none';
-  animation = frame.animate([{transform:start},{transform:'translate3d(0,0,0) scale(1)'}], {
+  position.style.transform = 'none';
+  animation = position.animate([{transform:start},{transform:'translate3d(0,0,0) scale(1)'}], {
     duration:reduced.matches ? 180 : 1600, easing:'cubic-bezier(.65,0,.35,1)', fill:'forwards',
   });
   if (reduced.matches) animation.effect.setKeyframes([{opacity:0},{opacity:1}]);
@@ -174,7 +177,7 @@ function finish() {
   document.title = 'Dashboard - Stratolink';
   portal.dataset.stage = stage;
   animation?.cancel();
-  frame.style.transform = 'none';
+  position.style.transform = 'none';
   frame.removeAttribute('aria-hidden');
   frame.inert = false;
   frame.tabIndex = 0;
