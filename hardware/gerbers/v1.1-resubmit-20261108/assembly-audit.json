@@ -1057,8 +1057,8 @@
       "ref": "R1",
       "value": "7.50MΩ",
       "footprint": "Stratolink_v1p1_R1_R_0402_1005Metric",
-      "mpn": "FRC0402F7504TS",
-      "lcsc": "C3013187",
+      "mpn": "0402WGF7504TCE",
+      "lcsc": "C423135",
       "native_anchor_mm": [
         67.05,
         41.169999
@@ -3433,8 +3433,8 @@
       "ref": "R1",
       "value": "7.50MΩ",
       "footprint": "Stratolink_v1p1_R1_R_0402_1005Metric",
-      "mpn": "FRC0402F7504TS",
-      "lcsc": "C3013187",
+      "mpn": "0402WGF7504TCE",
+      "lcsc": "C423135",
       "native_anchor_mm": [
         67.05,
         41.169999
@@ -4860,8 +4860,8 @@
         "lcsc": "C423131"
       },
       "current": {
-        "mpn": "FRC0402F7504TS",
-        "lcsc": "C3013187"
+        "mpn": "0402WGF7504TCE",
+        "lcsc": "C423135"
       }
     },
     {

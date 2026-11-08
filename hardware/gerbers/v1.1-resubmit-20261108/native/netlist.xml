@@ -2,7 +2,7 @@
 <export version="E">
   <design>
     <source>/Users/twarn/Repositories/Stratolink/hardware/pcb/stratolink.kicad_sch</source>
-    <date>2026-11-08T10:15:41</date>
+    <date>2026-11-08T10:26:24</date>
     <tool>Eeschema 10.0.0</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
@@ -1146,28 +1146,28 @@
     <comp ref="R1">
       <value>7.50MΩ</value>
       <footprint>lib:Stratolink_v1p1_R1_R_0402_1005Metric</footprint>
-      <datasheet>https://www.lcsc.com/product-detail/C3013187.html</datasheet>
-      <description>FRC0402F7504TS; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor</description>
+      <datasheet>https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf</datasheet>
+      <description>0402WGF7504TCE; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor</description>
       <fields>
-        <field name="Manufacturer">FOJAN</field>
-        <field name="Manufacturer_Part_Number">FRC0402F7504TS</field>
+        <field name="Manufacturer">UNI-ROYAL</field>
+        <field name="Manufacturer_Part_Number">0402WGF7504TCE</field>
         <field name="Supplier">LCSC</field>
-        <field name="LCSC">C3013187</field>
-        <field name="Supplier Part">C3013187</field>
-        <field name="MPN">FRC0402F7504TS</field>
-        <field name="LCSC Part #">C3013187</field>
+        <field name="LCSC">C423135</field>
+        <field name="Supplier Part">C423135</field>
+        <field name="MPN">0402WGF7504TCE</field>
+        <field name="LCSC Part #">C423135</field>
         <field name="Footprint">lib:Stratolink_v1p1_R1_R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.lcsc.com/product-detail/C3013187.html</field>
-        <field name="Description">FRC0402F7504TS; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor</field>
+        <field name="Datasheet">https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf</field>
+        <field name="Description">0402WGF7504TCE; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor</field>
       </fields>
       <libsource lib="Stratolink_v1p1_Symbols" part="Device_R_US" description="Resistor, US symbol"/>
-      <property name="Manufacturer" value="FOJAN"/>
-      <property name="Manufacturer_Part_Number" value="FRC0402F7504TS"/>
+      <property name="Manufacturer" value="UNI-ROYAL"/>
+      <property name="Manufacturer_Part_Number" value="0402WGF7504TCE"/>
       <property name="Supplier" value="LCSC"/>
-      <property name="LCSC" value="C3013187"/>
-      <property name="Supplier Part" value="C3013187"/>
-      <property name="MPN" value="FRC0402F7504TS"/>
-      <property name="LCSC Part #" value="C3013187"/>
+      <property name="LCSC" value="C423135"/>
+      <property name="Supplier Part" value="C423135"/>
+      <property name="MPN" value="0402WGF7504TCE"/>
+      <property name="LCSC Part #" value="C423135"/>
       <property name="Sheetname" value=""/>
       <property name="Sheetfile" value="stratolink.kicad_sch"/>
       <property name="ki_keywords" value="R res resistor"/>
