@@ -1,0 +1,84 @@
+{
+  "substitution": "R1 only: FOJAN FRC0402F7504TS / C3013187 to UNI-ROYAL 0402WGF7504TCE / C423135",
+  "technical_gate": "Parent confirmed manufacturer-authored datasheet review and package compatibility on 2026-11-08. Value, circuit, and all geometry remain unchanged.",
+  "files": {
+    "stratolink.kicad_pcb": {
+      "before_sha256": "532dfc743b315fc4957f4f9cbb4b5d580ec4ca996b48c89840083dfbd979faf0",
+      "after_sha256": "406a3a0797275d76d41da72e34d95c741453f80384fdd078577d3291b3bdadec",
+      "properties": {
+        "Datasheet": {
+          "before": "https://www.lcsc.com/product-detail/C3013187.html",
+          "after": "https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf"
+        },
+        "Description": {
+          "before": "FRC0402F7504TS; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor",
+          "after": "0402WGF7504TCE; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor"
+        },
+        "Manufacturer": {
+          "before": "FOJAN",
+          "after": "UNI-ROYAL"
+        },
+        "Manufacturer_Part_Number": {
+          "before": "FRC0402F7504TS",
+          "after": "0402WGF7504TCE"
+        },
+        "LCSC": {
+          "before": "C3013187",
+          "after": "C423135"
+        },
+        "Supplier Part": {
+          "before": "C3013187",
+          "after": "C423135"
+        },
+        "MPN": {
+          "before": "FRC0402F7504TS",
+          "after": "0402WGF7504TCE"
+        },
+        "LCSC Part #": {
+          "before": "C3013187",
+          "after": "C423135"
+        }
+      },
+      "full_file_reverse_check": true
+    },
+    "stratolink.kicad_sch": {
+      "before_sha256": "092ddb3451545cc6f7d7d64d8c02c933e89a40acb6897d865e3a8936d54e21fb",
+      "after_sha256": "c63bf8333c120048e29ae4d5024a7a088d5c89d096a356b02b6aa4929408f62a",
+      "properties": {
+        "Datasheet": {
+          "before": "https://www.lcsc.com/product-detail/C3013187.html",
+          "after": "https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf"
+        },
+        "Description": {
+          "before": "FRC0402F7504TS; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor",
+          "after": "0402WGF7504TCE; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor"
+        },
+        "Manufacturer": {
+          "before": "FOJAN",
+          "after": "UNI-ROYAL"
+        },
+        "Manufacturer_Part_Number": {
+          "before": "FRC0402F7504TS",
+          "after": "0402WGF7504TCE"
+        },
+        "LCSC": {
+          "before": "C3013187",
+          "after": "C423135"
+        },
+        "Supplier Part": {
+          "before": "C3013187",
+          "after": "C423135"
+        },
+        "MPN": {
+          "before": "FRC0402F7504TS",
+          "after": "0402WGF7504TCE"
+        },
+        "LCSC Part #": {
+          "before": "C3013187",
+          "after": "C423135"
+        }
+      },
+      "full_file_reverse_check": true
+    }
+  }
+}

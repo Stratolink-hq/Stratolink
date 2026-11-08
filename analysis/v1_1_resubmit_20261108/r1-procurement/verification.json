@@ -1,0 +1,12 @@
+{
+  "drc_violations": 0,
+  "unconnected_items": 0,
+  "schematic_parity": 0,
+  "erc_unexcluded": 0,
+  "erc_existing_excluded_warnings": 2,
+  "canonical_hashes": {
+    "stratolink.kicad_pcb": "406a3a0797275d76d41da72e34d95c741453f80384fdd078577d3291b3bdadec",
+    "stratolink.kicad_sch": "c63bf8333c120048e29ae4d5024a7a088d5c89d096a356b02b6aa4929408f62a"
+  },
+  "full_file_reversibility": "Changing only the eight R1 property strings back recreates each pre-substitution source byte-for-byte. No geometry, copper fill, routes, nets, circuit values, UUIDs, or formatting changed."
+}

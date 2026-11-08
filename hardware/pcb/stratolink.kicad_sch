@@ -66893,7 +66893,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.lcsc.com/product-detail/C3013187.html"
+		(property "Datasheet" "https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf"
 			(at 222.25 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -66904,7 +66904,7 @@
 				)
 			)
 		)
-		(property "Description" "FRC0402F7504TS; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor"
+		(property "Description" "0402WGF7504TCE; 7.50 MΩ, 1%, 100 ppm/°C charge-ceiling resistor"
 			(at 222.25 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -66915,7 +66915,7 @@
 				)
 			)
 		)
-		(property "Manufacturer" "FOJAN"
+		(property "Manufacturer" "UNI-ROYAL"
 			(at 222.25 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -66926,7 +66926,7 @@
 				)
 			)
 		)
-		(property "Manufacturer_Part_Number" "FRC0402F7504TS"
+		(property "Manufacturer_Part_Number" "0402WGF7504TCE"
 			(at 222.25 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -66948,7 +66948,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C3013187"
+		(property "LCSC" "C423135"
 			(at 222.25 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -66959,7 +66959,7 @@
 				)
 			)
 		)
-		(property "Supplier Part" "C3013187"
+		(property "Supplier Part" "C423135"
 			(at 222.25 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -66970,7 +66970,7 @@
 				)
 			)
 		)
-		(property "MPN" "FRC0402F7504TS"
+		(property "MPN" "0402WGF7504TCE"
 			(at 0 0 0)
 			(hide yes)
 			(show_name no)
@@ -66981,7 +66981,7 @@
 				)
 			)
 		)
-		(property "LCSC Part #" "C3013187"
+		(property "LCSC Part #" "C423135"
 			(at 0 0 0)
 			(hide yes)
 			(show_name no)
