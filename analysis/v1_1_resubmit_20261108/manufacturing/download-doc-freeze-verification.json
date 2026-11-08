@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "all_bundle_manifest_and_native_verification_bytes_unchanged_after_doc_freeze": true,
+  "pcb_sha256": "406a3a0797275d76d41da72e34d95c741453f80384fdd078577d3291b3bdadec",
+  "files": {
+    "stratolink-v1.1-kicad.zip": "a35ff75ddf541b7b4a837706578e55971a224676d541e760bb1cb8b0c5c12ca0",
+    "manifest.json": "d1311e7e22b5301868e938ecdc96ec7d888735bc5b986afdb0d929e7cab3539b",
+    "verification.json": "3257eec423e758beadc9d5b403fca31cf89651861c3cd0ebdbc9fc1aca203bfd",
+    "stratolink-v1.1-libraries.zip": "eb06e51a145a8ed5224ac9c3ce937fce767f6e130dfee405431f180fef44c9b1"
+  }
+}

@@ -1,0 +1,22 @@
+[
+  "/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3",
+  "/Users/twarn/Repositories/Stratolink/analysis/v1_1_release_20261012/manufacturing/generate.py",
+  "--candidate",
+  "/Users/twarn/Repositories/Stratolink/hardware/pcb",
+  "--output",
+  "/Users/twarn/Repositories/Stratolink/hardware/gerbers/v1.1-resubmit-20261108",
+  "--finish",
+  "green-mask-no-silk",
+  "--supplier-rotation-profile",
+  "/Users/twarn/Repositories/Stratolink/analysis/v1_1_resubmit_20261108/manufacturing/supplier-rotation-profile.json",
+  "--population-profile",
+  "/Users/twarn/Repositories/Stratolink/analysis/v1_1_resubmit_20261108/manufacturing/population-profile.json",
+  "--allow-part-change",
+  "R1",
+  "--allow-part-change",
+  "R4",
+  "--allow-part-change",
+  "U2",
+  "--allow-part-change",
+  "U6"
+]

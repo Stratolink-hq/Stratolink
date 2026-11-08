@@ -1,0 +1,225 @@
+{
+  "source_sha256": "e02bf87186fc86b90569b6ea25041a34c7d2e32ef39b951847956cc2d2eb0f13",
+  "candidate_sha256": "532dfc743b315fc4957f4f9cbb4b5d580ec4ca996b48c89840083dfbd979faf0",
+  "footprint_count": 68,
+  "pad_count": 259,
+  "moved": [
+    {
+      "ref": "R21",
+      "before_nm": [
+        56698999,
+        79546999
+      ],
+      "after_nm": [
+        56000000,
+        79546999
+      ]
+    },
+    {
+      "ref": "C15",
+      "before_nm": [
+        56709998,
+        78400998
+      ],
+      "after_nm": [
+        56030000,
+        78400998
+      ]
+    },
+    {
+      "ref": "R11",
+      "before_nm": [
+        68950000,
+        42190000
+      ],
+      "after_nm": [
+        68950000,
+        41840000
+      ]
+    }
+  ],
+  "removed_track_count": 13,
+  "added_tracks_and_vias": [
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        66900000,
+        42800000
+      ],
+      "end": [
+        66900000,
+        43053000
+      ],
+      "width": 200000,
+      "net": "SDA",
+      "layer": "B.Cu",
+      "drill": null,
+      "uuid": "360ffb0b-4c04-4b94-81d1-8291d0380f26"
+    },
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        56510000,
+        78400998
+      ],
+      "end": [
+        56510000,
+        79546999
+      ],
+      "width": 300000,
+      "net": "PA15",
+      "layer": "F.Cu",
+      "drill": null,
+      "uuid": "39cab139-6203-4eb3-ab7a-3ee0cee25e38"
+    },
+    {
+      "type": "PCB_VIA",
+      "start": [
+        66900000,
+        42800000
+      ],
+      "end": [
+        66900000,
+        42800000
+      ],
+      "width": 500000,
+      "net": "SDA",
+      "layer": "F.Cu",
+      "drill": 300000,
+      "uuid": "c5e1bef0-f187-4bc1-844e-4b9fd78b9ef3"
+    },
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        67710000,
+        41550000
+      ],
+      "end": [
+        68149999,
+        41550000
+      ],
+      "width": 200000,
+      "net": "SDA",
+      "layer": "F.Cu",
+      "drill": null,
+      "uuid": "b55c4904-d059-4ce4-9172-cdb9092298de"
+    },
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        60680000,
+        78100000
+      ],
+      "end": [
+        56810998,
+        78100000
+      ],
+      "width": 300000,
+      "net": "PA15",
+      "layer": "F.Cu",
+      "drill": null,
+      "uuid": "634dc2d9-abf8-4c4f-ae58-6c6b2d9e6387"
+    },
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        68149999,
+        41550000
+      ],
+      "end": [
+        68439999,
+        41840000
+      ],
+      "width": 200000,
+      "net": "SDA",
+      "layer": "F.Cu",
+      "drill": null,
+      "uuid": "9b0b7f64-ea2e-475f-a519-7b7da37b2e78"
+    },
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        56810998,
+        78100000
+      ],
+      "end": [
+        56510000,
+        78400998
+      ],
+      "width": 300000,
+      "net": "PA15",
+      "layer": "F.Cu",
+      "drill": null,
+      "uuid": "8b4fbc06-b442-4cfd-be43-0eb8a97c3290"
+    },
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        57190000,
+        80480000
+      ],
+      "end": [
+        57190000,
+        80650000
+      ],
+      "width": 300000,
+      "net": "PA15",
+      "layer": "F.Cu",
+      "drill": null,
+      "uuid": "ad63abee-e65d-45b4-a511-e8e81a7e9d76"
+    },
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        56510000,
+        79546999
+      ],
+      "end": [
+        56510000,
+        79800000
+      ],
+      "width": 300000,
+      "net": "PA15",
+      "layer": "F.Cu",
+      "drill": null,
+      "uuid": "5c6f282b-b0cf-4876-9528-c82691e7ee9b"
+    },
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        66710000,
+        42800000
+      ],
+      "end": [
+        66900000,
+        42800000
+      ],
+      "width": 200000,
+      "net": "SDA",
+      "layer": "F.Cu",
+      "drill": null,
+      "uuid": "f5f1fdae-0346-499b-8dbc-89580f41b4c4"
+    },
+    {
+      "type": "PCB_TRACK",
+      "start": [
+        56510000,
+        79800000
+      ],
+      "end": [
+        57190000,
+        80480000
+      ],
+      "width": 300000,
+      "net": "PA15",
+      "layer": "F.Cu",
+      "drill": null,
+      "uuid": "6b16b122-8c44-4199-8f7f-8ee3fa116673"
+    }
+  ],
+  "reshaped_track_count": 6,
+  "pad_nets_and_geometries_unchanged": true,
+  "old_vias_unchanged": true,
+  "zone_settings_unchanged": true,
+  "outline_unchanged": true
+}

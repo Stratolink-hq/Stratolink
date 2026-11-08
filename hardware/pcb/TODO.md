@@ -1,8 +1,8 @@
 # Stratolink v1.1 and v2 checklist
 
-Updated 16 October 2026 after the final pre-order closeout. The [final sweep](../../analysis/v1_1_final_sweep_20261016/README.md) binds the current source and manufacturing files; the [pre-order closeout](../../analysis/v1_1_preorder_closeout_20261016/README.md) distinguishes completed preparation from later factory and pilot acceptance. JLC **Y26** is saved for five PCBs and three assemblies. The current external wait is the emailed AS7331 sourcing/lead-time quote. No checkout or payment has been made.
+Updated 8 November 2026 for the [corrected replacement pilots](../../analysis/v1_1_resubmit_20261108/README.md). C15/R21 spacing, the GNSS module allowance and R1 procurement identity are corrected and reviewed. The replacement cart is saved and verified for five PCBs and three Standard assemblies on both sides. No replacement order has been submitted or paid, and manufacturing has not been approved. Cancellation of **Y27-2680969A / SMT026110264457_Y27** is requested but unconfirmed. The November 6 approval applies only to the earlier order; the replacement cart preview has been reviewed, while its later factory production files still require review.
 
-## Completed preparation for the three pilot assemblies
+## Earlier pilot preparation retained as baseline
 
 - [x] Compare the schematic, exported netlist and all physical pad assignments against the previous v1.1. No circuit changes.
 - [x] Preserve the rerouted layout. Correct two signal-to-ground shorts, reconnect two ground sections, adjust local mask openings and remove two trapped copper gaps.
@@ -12,21 +12,32 @@ Updated 16 October 2026 after the final pre-order closeout. The [final sweep](..
 - [x] Retain the green mask/no-silkscreen finish, 0.40 mm ENIG construction, solar notches, reinforced suspension holes, larger rear programming lands, corrected TMP117, microphone omission and flat rear capacitor.
 - [x] Retain the full AS7331 circuit. Initial pilot omits only U6; C14/C23/R27 remain fitted. Use the explicit UV-DNP firmware target.
 - [x] Regenerate and verify matching manufacturing and downloadable KiCad/library bundles from the final source.
-- [x] Import and review both faces in JLC. All 57 selected references match exact MPN/LCSC/footprint/side data. All seven populated IC orientations have been reviewed; U8 uses verified supplier CPL 90 degrees. The current Y26 cart retains these files and selections.
+- [x] Import and review both faces in JLC. On November 2, all 57 selected references matched the then-current MPN/LCSC/footprint/side data. All seven populated IC orientations agreed with those previews; U8 used supplier CPL 90 degrees. These were the original Y27 files and selections. The later U1 factory-image correction and replacement reviews are recorded below.
 - [x] Restore the missing working-copy VSTOR voltage-sense segment and strict mask checks; preserve schematic cosmetics and all reviewed footprint poses.
 - [x] Prepare both UV-omitted and populated exports from the same current source. Verify U6 is the only population difference and sixteen U6 paste apertures are the only stencil difference.
 - [x] Send JLC the sourcing inquiry with the current draft reference, total added cost, earliest dispatch and optical-package handling questions. Reply is expected in the personal email thread.
 
-## Current external wait
+## Original pilot ordering decision
 
-- [ ] Receive JLC's AS7331 sourcing cost and lead-time reply, then choose the pilot population. Exact source/ordering identity and U6 supplier machine orientation/process acceptance belong to this supplier decision; the native U6 circuit, footprint and export are already prepared and reviewed. Keep the existing UV-omitted cart while awaiting that reply.
+- [x] JLC canceled quote XOB2026101800470 on October 26 because its supplier could not supply three sensors. On November 2, both AQFM and AQFT remain unavailable at JLC and LCSC. Teddy chose three UV-omitted pilots. No sourcing reply remains a prerequisite for this order.
+- [x] Refresh and save the original Y27 cart with the reviewed package, corrected source identifiers in the remarks, 57 selected placements and manual production/placement approval. Its November 2 estimate was $326.85 for PCB/assembly and $347.71 with displayed shipping and coupon. These are historical figures, not the replacement quote.
 
 ## Factory work after the ordering decision
 
 These are checks of files JLC generates for the order, not unfinished native design work.
 
-- [ ] Review JLC's production panel, rail/tab positions, fine-pitch mask/land handling, stencil and final placement output when they are issued. Preserve the notches, suspension holes, no-silkscreen finish and specified apertures. Check 57 unique placements for UV omitted or 58 for UV populated.
-- [x] Manual production-file and placement confirmation enabled; automatic production approval disabled, verified again in the saved form. Preserve these settings when ordering and compare any supplier substitution or geometry change to the reviewed files.
+- [x] Review JLC's actual PCB production package, panel/tab positions, copper connectivity, mask and drills. November 6: 59 nets, 183 board holes and source outline preserved; six breakaway tabs clear pads/tracks/vias. Factory compensations are documented in the [CAM review](../../analysis/v1_1_cam_review_20261106/README.md). Included ODB paste still omits U6 and retains C14/C23/R27.
+- [x] Confirm the reviewed PCB production file on JLC. November 6: submitted with Teddy's explicit authorization; JLC displayed “Submit success” and “Production file Confirmed”.
+- [x] Review JLC's November 7 final assembly images. Found U1 pin-1 index opposite the released board and C15/R21 absent from the depiction. The U2 body-clearance issue was not caught by prior copper DRC; its footprint lacks a body/courtyard outline. See [assembly review](../../analysis/v1_1_assembly_review_20261107/README.md).
+- [x] Review corrected U1 orientation. November 8 updated supplier image has the index upper-left beside C4, matching released pad 1. Other IC indices remain consistent; C15/R21 are still absent. See [follow-up review](../../analysis/v1_1_assembly_followup_20261108/README.md).
+- [x] Choose the C15/R21 disposition. November 8: Teddy chose a corrected PCB and cancellation/resubmission instead of local rework. Both parts must remain factory-fitted. Cancellation of Y27-2680969A / SMT026110264457_Y27 was requested by email; the earlier hand-rework proposal is superseded.
+- [ ] Receive JLC's cancellation confirmation and refund/credit breakdown, including whether purchased components can transfer. Do not treat the request as completed cancellation.
+- [x] Correct C15/R21 spacing, move R11 upward 0.35 mm for GNSS residual-tab allowance, and add U2 body/courtyard geometry. November 8: DRC has no active findings, all 59 copper nets remain connected, and all 940 same-face pairs of 57 fitted SMT parts clear the 0.2 mm package-envelope screen. Circuit and net assignments are unchanged. See the [replacement review](../../analysis/v1_1_resubmit_20261108/README.md).
+- [x] Qualify **UNI-ROYAL 0402WGF7504TCE / C423135** for R1 and update its procurement fields in the PCB and schematic. Resistance remains 7.50 MΩ ±1%; no footprint, placement or routing change. JLC showed 10,002 available on November 8, compared with 17 of the prior part against 20 required. This is an availability observation, not a reservation. The regenerated BOM and all-57 clearance audit use the new identity. [Source and compatibility review](../../analysis/v1_1_resubmit_20261108/r1-sourcing.md).
+- [x] Regenerate and verify the dated replacement manufacturing and download bundles, bound to PCB `406a3a…` and schematic `c63bf8…`. The retained fabrication upload is physically equivalent to the regenerated ZIP; the amended R1 BOM is uploaded and the CPL is unchanged by the procurement substitution.
+- [x] Save and verify replacement PCB cart **Y28-2680969A** and PCBA **SMT026110862453-2680969A**. All 57 MPN/LCSC identities, sides and selection checkboxes match, including C15/R21. All seven fitted IC pin-1 indices match the intended physical orientations in the new preview. Merchandise is $326.63 plus estimated shipping of $26.60, for an estimated $353.23 subtotal. The site estimates shipment on November 14, 2026; this is not guaranteed.
+- [ ] Submit/pay for the replacement after Teddy's review. New factory CAM and placement files require review before manufacturing approval. No replacement submission, payment or production approval has been made.
+- [x] Manual production-file and placement confirmation were enabled for the original Y27 order; automatic production approval was disabled. Preserve these settings for the replacement and compare any supplier substitution or geometry change to the reviewed files.
 
 Previous implementation decisions and their original evidence remain under [the v1.1 release record](../../analysis/v1_1_release_20261012/), [digital review](../../analysis/v1_1_peer_review_20261014/digital/README.md) and [power review](../../analysis/v1_1_peer_review_20261014/power/README.md). Retain both 10 uF capacitors, the 4.7 kohm I2C pull-ups and the established RAK SWD mapping. UART observation requires avoiding transmitter contention. These electrical decisions survive the reroute; old coordinates, mask results and supplier previews do not.
 
@@ -44,7 +55,7 @@ These require actual hardware and do not block ordering development samples. The
 
 ## Follow-on experiments and supply work
 
-- [ ] **Bring up AS7331 if populated.** Native hardware and both export options are complete; supply is the current external wait above. Validate bounded command-mode acquisition, verified power-down and raw multiband telemetry on the fitted part. Do not reuse DNP firmware after fitting U6; AS7331 provides no visible ALS.
+- [ ] **Bring up AS7331 if populated later.** Native hardware and both export options are complete. The November pilots omit U6; sourcing is follow-on work. Validate bounded command-mode acquisition, verified power-down and raw multiband telemetry on the fitted part. Do not reuse DNP firmware after fitting U6; AS7331 provides no visible ALS.
 - [ ] **Characterize the UV experiment.** Measure dark offsets, gain/exposure, saturation, temperature, angular response and sunlight VIS/NIR leakage. Design an appropriate opaque angle-limiting collector and blocking filter as needed, then compare against calibrated spectra. Broad-band ratio alone is not accepted ozone metrology. [Requirements](../../analysis/v1_1_release_20261012/as7331/review/requirements.md).
 - [ ] **Find a sustainable flat-capacitor replacement.** Preserve the current 30 × 14 × 3.7 mm rear envelope unless measurements justify a change. Compare price/stock, terminals, mass, tolerance, cold ESR/leakage and dark/recovery performance. Smaller 470 mF and wider HW203F candidates are tradeoffs, not equivalents. Local notes: `analysis/v1_1_layout_20261012/flat_storage/README.md`.
 - [ ] **Resolve IMU idle current.** Verify LIS2DH12 SA0 pull-up control (`CTRL_REG0.SDO_PU_DISC`) in the selected firmware. The remaining grounded-strap ERC disposition does not establish minimum sleep current. The old LTR390 interrupt configuration no longer applies to this PCB.

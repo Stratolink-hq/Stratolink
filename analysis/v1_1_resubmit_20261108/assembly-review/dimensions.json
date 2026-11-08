@@ -1,0 +1,298 @@
+{
+  "ref_rules": {
+    "U1": "u1",
+    "U2": "u2",
+    "U3": "u3",
+    "U4": "u4",
+    "U5": "u5",
+    "U7": "u7",
+    "U8": "u8",
+    "R27": "r27",
+    "C1": "c1",
+    "FB1": "fb1",
+    "D1": "d_sod523",
+    "D3": "d_sod523",
+    "L1": "l1",
+    "L2": "l2",
+    "R1": "r1_uniroyal"
+  },
+  "groups": {
+    "u1": {
+      "nominal_mm": [
+        3.5,
+        3.5
+      ],
+      "screen_mm": [
+        3.65,
+        3.65
+      ],
+      "fixed_board_angle": 180,
+      "basis": "TI RGR0020A package drawing 3.65 mm maximum, not land pattern",
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/bq25570.pdf"
+      ]
+    },
+    "u2": {
+      "nominal_mm": [
+        15.515,
+        15.045
+      ],
+      "screen_mm": [
+        15.615,
+        15.145
+      ],
+      "fixed_board_angle": 180,
+      "basis": "RAK nominal 15.5x15.0 mm body. Union of STEP-origin and frozen-CPL registration, then 0.05 mm added each side as an engineering screen allowance. Drawing does not specify a dimensional tolerance.",
+      "sources": [
+        "https://docs.rakwireless.com/product-categories/wisduo/rak3172-module/datasheet/",
+        "https://images.docs.rakwireless.com/wisduo/rak3172-module/datasheet/mechanical_dimension.jpg"
+      ]
+    },
+    "u3": {
+      "nominal_mm": [
+        9.7,
+        10.1
+      ],
+      "screen_mm": [
+        9.8,
+        11.9
+      ],
+      "fixed_board_angle": 180,
+      "basis": "u-blox UBX-20035208 R08 p17 Amax10.7, Bmax9.8, residual tab Pmax0.6. Deliberately conservative union: centered maximum body plus 0.6 at both possible length ends. Not a prediction that both tabs are present. Separately compare integration-manual UBX-20053088 R05 (28-Apr-2026), p82 Figure30 recommended11.1x10.1 keepout.",
+      "sources": [
+        "https://content.u-blox.com/sites/default/files/MAX-M10S_DataSheet_UBX-20035208.pdf",
+        "https://content.u-blox.com/sites/default/files/MAX-M10S_IntegrationManual_UBX-20053088.pdf"
+      ]
+    },
+    "u4": {
+      "nominal_mm": [
+        3,
+        5
+      ],
+      "screen_mm": [
+        3.1,
+        5.1
+      ],
+      "fixed_board_angle": 0,
+      "basis": "Measurement Specialties DA5611-01BA03_011,26-Oct-2012,p14:3x5 body,general tolerance +/-0.05. Screen adds0.10 total each axis, larger than drawing maximum.",
+      "sources": [
+        "/Users/twarn/Repositories/ai-working/scratch/stratolink-release-20261012/power/orientation/MS5611-old.pdf"
+      ]
+    },
+    "u5": {
+      "nominal_mm": [
+        0.95,
+        1.48
+      ],
+      "screen_mm": [
+        1,
+        1.53
+      ],
+      "fixed_board_angle": 180,
+      "basis": "TI TMP117 YBG six-ball DSBGA package maximum1.53x1.00, transformed into current board pose",
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/tmp117.pdf"
+      ]
+    },
+    "u7": {
+      "nominal_mm": [
+        2,
+        2
+      ],
+      "screen_mm": [
+        2.15,
+        2.15
+      ],
+      "fixed_board_angle": 90,
+      "basis": "ST LIS2DH12 DocID025056 Rev6 May2017,p49 Figure12:2.00+/-0.15 mm L/W",
+      "sources": [
+        "https://www.st.com/resource/en/datasheet/lis2dh12.pdf"
+      ]
+    },
+    "u8": {
+      "nominal_mm": [
+        2.8,
+        2.9
+      ],
+      "screen_mm": [
+        3,
+        3.05
+      ],
+      "fixed_board_angle": 180,
+      "basis": "TI DBV0005A:maximum full lead span3.0 and long dimension3.05; includes leads rather than using plastic body alone",
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/tlv8801.pdf"
+      ]
+    },
+    "c1": {
+      "nominal_mm": [
+        1,
+        0.5
+      ],
+      "screen_mm": [
+        1.15,
+        0.65
+      ],
+      "basis": "Murata GRM1555C1E103JE01-01A reference sheet20-Dec-2024,p2:1.0+/-0.15 and0.5+/-0.15",
+      "sources": [
+        "https://search.murata.co.jp/Ceramy/image/img/A01X/G101/ENG/GRM1555C1E103JE01-01A.pdf"
+      ]
+    },
+    "c0402": {
+      "nominal_mm": [
+        1,
+        0.5
+      ],
+      "screen_mm": [
+        1.05,
+        0.55
+      ],
+      "basis": "Samsung CL05B104KO5NNN product size table:1.00+/-0.05,0.50+/-0.05",
+      "sources": [
+        "https://product.samsungsem.com/mlcc/CL05B104KO5NNN.do"
+      ]
+    },
+    "c0603": {
+      "nominal_mm": [
+        1.6,
+        0.8
+      ],
+      "screen_mm": [
+        1.7,
+        0.9
+      ],
+      "basis": "Samsung CL10A475 and CL10A106 product size tables:1.60+/-0.10,0.80+/-0.10",
+      "sources": [
+        "https://product.samsungsem.com/mlcc/CL10A475KP8NNN.do",
+        "https://product.samsungsem.com/mlcc/CL10A106KP8NNN.do"
+      ]
+    },
+    "c0805": {
+      "nominal_mm": [
+        2,
+        1.25
+      ],
+      "screen_mm": [
+        2.2,
+        1.45
+      ],
+      "basis": "Samsung CL21A226 product size table:2.00+/-0.20,1.25+/-0.20",
+      "sources": [
+        "https://product.samsungsem.com/mlcc/CL21A226MAYNNN.do"
+      ]
+    },
+    "r0402_yageo_vishay": {
+      "nominal_mm": [
+        1,
+        0.5
+      ],
+      "screen_mm": [
+        1.05,
+        0.55
+      ],
+      "basis": "0402 chip-resistor envelope1.00+/-0.05 by0.50+/-0.05; family dimension, not individual measured incoming parts",
+      "sources": []
+    },
+    "r0402_other": {
+      "nominal_mm": [
+        1,
+        0.5
+      ],
+      "screen_mm": [
+        1.15,
+        0.65
+      ],
+      "basis": "Native0402 body with enlarged0.15mm total dimensional allowance each axis. Engineering screen assumption for FRC,GR,andUniroyal parts; exactlotdrawing not independently retrieved.",
+      "sources": []
+    },
+    "r27": {
+      "nominal_mm": [
+        2,
+        1.25
+      ],
+      "screen_mm": [
+        2.1,
+        1.4
+      ],
+      "basis": "Vishay MCU0805 family dimensional envelope2.0+/-0.1 by1.25+/-0.15",
+      "sources": [
+        "https://www.vishay.com/docs/28700/mcx0x0xpre.pdf"
+      ]
+    },
+    "fb1": {
+      "nominal_mm": [
+        1,
+        0.5
+      ],
+      "screen_mm": [
+        1.1,
+        0.6
+      ],
+      "basis": "Native0402 ferrite envelope plus0.10mm total each axis, engineering screening allowance",
+      "sources": []
+    },
+    "d_sod523": {
+      "nominal_mm": [
+        1.6,
+        0.8
+      ],
+      "screen_mm": [
+        1.8,
+        1
+      ],
+      "basis": "SOD523 full package including terminals, engineering screening box enlarged beyond nominal. ExactLeiditech drawing not certified by this screen.",
+      "sources": []
+    },
+    "l1": {
+      "nominal_mm": [
+        4,
+        4
+      ],
+      "screen_mm": [
+        4.2,
+        4.2
+      ],
+      "basis": "Coilcraft LPS4018 nominal4x4mm; enlarged0.20mm total each axis engineering screening allowance, not a claimed drawing tolerance",
+      "sources": [
+        "https://www.coilcraft.com/getmedia/31b05c96-4c4c-4498-8dbb-fe092de76bad/lps4018.pdf"
+      ]
+    },
+    "l2": {
+      "nominal_mm": [
+        1.6,
+        0.8
+      ],
+      "screen_mm": [
+        1.8,
+        1
+      ],
+      "basis": "Native1608 body with0.20mm total allowance each axis, engineering screening assumption",
+      "sources": []
+    },
+    "r1_uniroyal": {
+      "nominal_mm": [
+        1,
+        0.5
+      ],
+      "screen_mm": [
+        1.15,
+        0.65
+      ],
+      "expected_mpn": "0402WGF7504TCE",
+      "expected_lcsc": "C423135",
+      "basis": "UNI-ROYAL 0402WGF7504TCE, standard thick-film WG family. Manufacturer drawing gives 1.00 +/-0.10 by 0.50 +/-0.05 mm, height 0.35 +/-0.05 mm. Retain the larger original R1 screen of 1.15 by 0.65 mm; no placement or footprint change. Exact MPN/LCSC identity is asserted against the regenerated BOM.",
+      "sources": [
+        "https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf",
+        "https://www.tme.eu/en/details/0402wgf7504tce/smd-resistors/royalohm/"
+      ]
+    }
+  },
+  "assumptions_and_limits": [
+    "All body envelopes are centered at their native footprint pose except U2, whose union encloses the two documented source registrations. Right-angle orientation is required and asserted.",
+    "The 0.2 mm threshold is from JLC's order-specific email. All 940 same-face pairs are evaluated. Opposite faces, bare lands, U6DNP, hand-fitted C5/antennas/solar and rails/nozzle access are outside this SMT-body pair screen.",
+    "A PASS means the stated numerical package envelopes clear the threshold at design centers. It is not a guarantee of assembly yield, machine placement accuracy, solder spread, dimensional origin tolerances or thin-board deformation.",
+    "Sources distinguish documented package dimensions from conservative engineering allowances. Some passive supplier dimensions were not independently tolerance-certified; their enlarged screen boxes are explicit assumptions.",
+    "MAX-M10S conservative envelope stacks maximum body and uncertain residual tab projection at either length end. Manufacturer recommended component keepout is also reported. This is a precautionary envelope, not evidence of an observed collision.",
+    "U1 pin1 corner is derived from actual pad1 and mirrored X for the bottom component-facing view. It must remain upper-left in the new factory DFM; a numeric CPL angle alone is not proof of orientation."
+  ]
+}

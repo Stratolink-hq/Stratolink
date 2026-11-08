@@ -1,0 +1,23 @@
+{
+  "package": "hardware/gerbers/v1.1-resubmit-20261108",
+  "source_pcb_sha256": "406a3a0797275d76d41da72e34d95c741453f80384fdd078577d3291b3bdadec",
+  "files": {
+    "fabrication-review.zip": "d2c855cd7a11de0a316d5cecd3cd597126b11e0a8000c2260028087dea8f9be3",
+    "BOM-stratolink.csv": "c9de8cbc9e537c64ba875f3d0f16821d876550b035b95e464bad5d8df6295894",
+    "CPL-stratolink.csv": "5f7d3d441e27cf43192db9ea38c0d73ec3c1062cae95c9a48f760238a77caaa8"
+  },
+  "population": "57 fitted references; C15/R21 fitted; only U6 omitted from SMT",
+  "r1": {
+    "mpn": "0402WGF7504TCE",
+    "lcsc": "C423135"
+  },
+  "equivalent_existing_fabrication_upload": {
+    "existing_uploaded_zip_sha256": "3d6e5ee781fe8c57edb24daa790908430d78d4476ae0c5875e60102f4f7cb85c",
+    "fresh_generated_zip_sha256": "d2c855cd7a11de0a316d5cecd3cd597126b11e0a8000c2260028087dea8f9be3",
+    "proof": "/Users/twarn/Repositories/Stratolink/analysis/v1_1_resubmit_20261108/manufacturing/r1-physical-equivalence.json",
+    "proof_sha256": "9e4e8b05c13551ffd1df6bb8cfbf49d3287110f003a108541c363a85728eabcb",
+    "scope": "Existing uploaded fabrication ZIP may be retained. Replace BOM with the amended R1 selection; CPL is byte-identical. This does not approve supplier CAM or placement."
+  },
+  "u1_orientation": "Pin 1 upper-left in bottom-facing, board-top-up view. Reconfirm replacement-order preview.",
+  "status": "Prepared for new-order review; no supplier upload or production approval by this script."
+}

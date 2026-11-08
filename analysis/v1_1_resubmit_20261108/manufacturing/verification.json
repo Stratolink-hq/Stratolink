@@ -1,0 +1,165 @@
+{
+  "result": "PASS",
+  "pcb_sha256": "406a3a0797275d76d41da72e34d95c741453f80384fdd078577d3291b3bdadec",
+  "packages": {
+    "v1.1-final-20261016": {
+      "output_files_verified": 37,
+      "zip_sha256": "9beee98a60014b8caed605984fdc57c0e1cd86d9c17861110f118a8b6ee259e4"
+    },
+    "v1.1-resubmit-20261108": {
+      "output_files_verified": 37,
+      "zip_sha256": "d2c855cd7a11de0a316d5cecd3cd597126b11e0a8000c2260028087dea8f9be3"
+    }
+  },
+  "assembly_count": 57,
+  "side_counts": {
+    "top": 41,
+    "bottom": 16
+  },
+  "body_clearance_audit": {
+    "path": "/Users/twarn/Repositories/Stratolink/analysis/v1_1_resubmit_20261108/assembly-review/final-clearance.json",
+    "sha256": "b787f72e4b5e30df0bb86c015ba70f01bc128ca18ef09e4b038bc8a4da52e6aa",
+    "result": "PASS",
+    "fitted_count": 57
+  },
+  "bom_identical_to_previous": false,
+  "schematic_hash_unchanged": false,
+  "schematic_netmap_unchanged": true,
+  "r1_procurement_amendment": {
+    "reference": "R1",
+    "before": {
+      "Comment": "FRC0402F7504TS",
+      "Designator": "R1",
+      "Footprint": "Stratolink_v1p1_R1_R_0402_1005Metric",
+      "LCSC Part #": "C3013187"
+    },
+    "after": {
+      "Comment": "0402WGF7504TCE",
+      "Designator": "R1",
+      "Footprint": "Stratolink_v1p1_R1_R_0402_1005Metric",
+      "LCSC Part #": "C423135"
+    },
+    "only_eight_approved_r1_fields_changed": true,
+    "all_other_component_subtrees_identical": true,
+    "value_footprint_pinmap_unchanged": true,
+    "profile": "/Users/twarn/Repositories/Stratolink/analysis/v1_1_resubmit_20261108/r1-procurement/property-diff.json",
+    "sha256": "e49a5afd2759a3f4455867f7af9a380907a26551c4862a051fdd31bc0bdd940b"
+  },
+  "equivalent_existing_fabrication_upload": {
+    "existing_uploaded_zip_sha256": "3d6e5ee781fe8c57edb24daa790908430d78d4476ae0c5875e60102f4f7cb85c",
+    "fresh_generated_zip_sha256": "d2c855cd7a11de0a316d5cecd3cd597126b11e0a8000c2260028087dea8f9be3",
+    "proof": "/Users/twarn/Repositories/Stratolink/analysis/v1_1_resubmit_20261108/manufacturing/r1-physical-equivalence.json",
+    "proof_sha256": "9e4e8b05c13551ffd1df6bb8cfbf49d3287110f003a108541c363a85728eabcb",
+    "scope": "Existing uploaded fabrication ZIP may be retained. Replace BOM with the amended R1 selection; CPL is byte-identical. This does not approve supplier CAM or placement."
+  },
+  "legacy_download_archives_preserved": {
+    "stratolink-v1.1-kicad.zip": "3ccc73d0b7c706cfd4fdd5c3b29f024c935306be8ce62c3e0d0c6e4fa57780a7",
+    "stratolink-v1.1-libraries.zip": "d8f2bf6d8aa67aca32657a4071c285e959193b245a5b15831a66d1ced3f48718"
+  },
+  "cpl_changed_rows": {
+    "C15": {
+      "before": {
+        "Designator": "C15",
+        "Mid X": "56.709998",
+        "Mid Y": "-78.400998",
+        "Layer": "top",
+        "Rotation": "0.000000"
+      },
+      "after": {
+        "Designator": "C15",
+        "Mid X": "56.030000",
+        "Mid Y": "-78.400998",
+        "Layer": "top",
+        "Rotation": "0.000000"
+      }
+    },
+    "R11": {
+      "before": {
+        "Designator": "R11",
+        "Mid X": "68.950000",
+        "Mid Y": "-42.190000",
+        "Layer": "top",
+        "Rotation": "180.000000"
+      },
+      "after": {
+        "Designator": "R11",
+        "Mid X": "68.950000",
+        "Mid Y": "-41.840000",
+        "Layer": "top",
+        "Rotation": "180.000000"
+      }
+    },
+    "R21": {
+      "before": {
+        "Designator": "R21",
+        "Mid X": "56.698999",
+        "Mid Y": "-79.546999",
+        "Layer": "top",
+        "Rotation": "180.000000"
+      },
+      "after": {
+        "Designator": "R21",
+        "Mid X": "56.000000",
+        "Mid Y": "-79.546999",
+        "Layer": "top",
+        "Rotation": "180.000000"
+      }
+    }
+  },
+  "stencil_u6_only_pad_changes": 16,
+  "paste": {
+    "F_Paste.gtp": {
+      "full_U6_apertures": 16,
+      "pilot_U6_apertures": 0,
+      "retained_artwork_commands": 1999,
+      "all_retained_paste_artwork_identical": true
+    },
+    "B_Paste.gbp": {
+      "full_U6_apertures": 0,
+      "pilot_U6_apertures": 0,
+      "retained_artwork_commands": 147,
+      "all_retained_paste_artwork_identical": true
+    }
+  },
+  "unchanged_outline_npth_silk": [
+    "stratolink-Edge_Cuts.gm1",
+    "stratolink-NPTH.drl",
+    "stratolink-F_Silkscreen.gto",
+    "stratolink-B_Silkscreen.gbo"
+  ],
+  "explicit_pth_via_delta": {
+    "net": "SDA",
+    "x_mm": 66.9,
+    "y_mm": 42.8,
+    "diameter_mm": 0.5,
+    "drill_mm": 0.3,
+    "layers": [
+      "F.Cu",
+      "B.Cu"
+    ],
+    "added_native_vias": 1,
+    "added_pth_hits": 1,
+    "all_previous_via_geometry_and_drill_commands_unchanged": true,
+    "previous_pth_sha256": "28659ce13822ecdea5be22edf6ffec1f9386c4a4c5c92d1fe1fdea0aa4a9b7b3",
+    "current_pth_sha256": "aea0fb5e19fc8f45f2ff48d7548b088a740bf2271a21dab9e755df08d2b7e9ce"
+  },
+  "source_differences": {
+    "lib/Stratolink_v1p1_U2_RAK3172.kicad_mod": {
+      "previous": "5d30ca8d063ec6e96c760ec0600b5da9550ef9556d79dd463343427bab363ca3",
+      "current": "ab55d4614eecc95774572ab2cd12f165b829c44be90c6f671b6b4253a3b33f4d"
+    },
+    "stratolink.kicad_pcb": {
+      "previous": "e02bf87186fc86b90569b6ea25041a34c7d2e32ef39b951847956cc2d2eb0f13",
+      "current": "406a3a0797275d76d41da72e34d95c741453f80384fdd078577d3291b3bdadec"
+    },
+    "stratolink.kicad_pro": {
+      "previous": "c9be5b22927d7fe889188023e69f6e774e808aa79d4ea13eb1b2ddc348ffe2f9",
+      "current": "f58bea38aac6cc625cfa81c1337565ce660b4cbf57cc3e444dfb5c4099e4dbe4"
+    },
+    "stratolink.kicad_sch": {
+      "previous": "092ddb3451545cc6f7d7d64d8c02c933e89a40acb6897d865e3a8936d54e21fb",
+      "current": "c63bf8333c120048e29ae4d5024a7a088d5c89d096a356b02b6aa4929408f62a"
+    }
+  },
+  "limits": "Package consistency and intended export scope. DRC, body clearance, electrical performance, supplier CAM and real assembly remain separate reviews."
+}

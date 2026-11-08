@@ -1,0 +1,1717 @@
+{
+  "hashes": {
+    "/Users/twarn/Repositories/Stratolink/analysis/v1_1_resubmit_20261108/layout/before/stratolink.kicad_pcb": "e02bf87186fc86b90569b6ea25041a34c7d2e32ef39b951847956cc2d2eb0f13",
+    "/Users/twarn/Repositories/Stratolink/analysis/v1_1_resubmit_20261108/layout/before/stratolink.kicad_sch": "092ddb3451545cc6f7d7d64d8c02c933e89a40acb6897d865e3a8936d54e21fb",
+    "/Users/twarn/Repositories/Stratolink/hardware/pcb/stratolink.kicad_pcb": "406a3a0797275d76d41da72e34d95c741453f80384fdd078577d3291b3bdadec",
+    "/Users/twarn/Repositories/Stratolink/hardware/pcb/stratolink.kicad_sch": "c63bf8333c120048e29ae4d5024a7a088d5c89d096a356b02b6aa4929408f62a"
+  },
+  "kicad": "10.0.0",
+  "schematic": {
+    "node_counts": [
+      247,
+      247
+    ],
+    "net_name_counts": [
+      59,
+      59
+    ],
+    "component_counts": [
+      66,
+      66
+    ],
+    "logical_node_changes": [],
+    "component_changes": [
+      {
+        "key": "R1",
+        "before": {
+          "value": {
+            "tag": "value",
+            "attrib": {},
+            "text": "7.50M\u03a9",
+            "children": []
+          },
+          "footprint": {
+            "tag": "footprint",
+            "attrib": {},
+            "text": "lib:Stratolink_v1p1_R1_R_0402_1005Metric",
+            "children": []
+          },
+          "datasheet": {
+            "tag": "datasheet",
+            "attrib": {},
+            "text": "https://www.lcsc.com/product-detail/C3013187.html",
+            "children": []
+          },
+          "description": {
+            "tag": "description",
+            "attrib": {},
+            "text": "FRC0402F7504TS; 7.50 M\u03a9, 1%, 100 ppm/\u00b0C charge-ceiling resistor",
+            "children": []
+          },
+          "fields": {
+            "tag": "fields",
+            "attrib": {},
+            "text": "",
+            "children": [
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Datasheet"
+                },
+                "text": "https://www.lcsc.com/product-detail/C3013187.html",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Description"
+                },
+                "text": "FRC0402F7504TS; 7.50 M\u03a9, 1%, 100 ppm/\u00b0C charge-ceiling resistor",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Footprint"
+                },
+                "text": "lib:Stratolink_v1p1_R1_R_0402_1005Metric",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "LCSC Part #"
+                },
+                "text": "C3013187",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "LCSC"
+                },
+                "text": "C3013187",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "MPN"
+                },
+                "text": "FRC0402F7504TS",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Manufacturer"
+                },
+                "text": "FOJAN",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Manufacturer_Part_Number"
+                },
+                "text": "FRC0402F7504TS",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Supplier Part"
+                },
+                "text": "C3013187",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Supplier"
+                },
+                "text": "LCSC",
+                "children": []
+              }
+            ]
+          },
+          "libsource": {
+            "tag": "libsource",
+            "attrib": {
+              "description": "Resistor, US symbol",
+              "lib": "Stratolink_v1p1_Symbols",
+              "part": "Device_R_US"
+            },
+            "text": "",
+            "children": []
+          },
+          "property": {
+            "tag": "property",
+            "attrib": {
+              "name": "ki_fp_filters",
+              "value": "R_*"
+            },
+            "text": "",
+            "children": []
+          },
+          "units": {
+            "tag": "units",
+            "attrib": {},
+            "text": "",
+            "children": [
+              {
+                "tag": "unit",
+                "attrib": {
+                  "name": "A"
+                },
+                "text": "",
+                "children": [
+                  {
+                    "tag": "pins",
+                    "attrib": {},
+                    "text": "",
+                    "children": [
+                      {
+                        "tag": "pin",
+                        "attrib": {
+                          "num": "1"
+                        },
+                        "text": "",
+                        "children": []
+                      },
+                      {
+                        "tag": "pin",
+                        "attrib": {
+                          "num": "2"
+                        },
+                        "text": "",
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "after": {
+          "value": {
+            "tag": "value",
+            "attrib": {},
+            "text": "7.50M\u03a9",
+            "children": []
+          },
+          "footprint": {
+            "tag": "footprint",
+            "attrib": {},
+            "text": "lib:Stratolink_v1p1_R1_R_0402_1005Metric",
+            "children": []
+          },
+          "datasheet": {
+            "tag": "datasheet",
+            "attrib": {},
+            "text": "https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf",
+            "children": []
+          },
+          "description": {
+            "tag": "description",
+            "attrib": {},
+            "text": "0402WGF7504TCE; 7.50 M\u03a9, 1%, 100 ppm/\u00b0C charge-ceiling resistor",
+            "children": []
+          },
+          "fields": {
+            "tag": "fields",
+            "attrib": {},
+            "text": "",
+            "children": [
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Datasheet"
+                },
+                "text": "https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Description"
+                },
+                "text": "0402WGF7504TCE; 7.50 M\u03a9, 1%, 100 ppm/\u00b0C charge-ceiling resistor",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Footprint"
+                },
+                "text": "lib:Stratolink_v1p1_R1_R_0402_1005Metric",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "LCSC Part #"
+                },
+                "text": "C423135",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "LCSC"
+                },
+                "text": "C423135",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "MPN"
+                },
+                "text": "0402WGF7504TCE",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Manufacturer"
+                },
+                "text": "UNI-ROYAL",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Manufacturer_Part_Number"
+                },
+                "text": "0402WGF7504TCE",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Supplier Part"
+                },
+                "text": "C423135",
+                "children": []
+              },
+              {
+                "tag": "field",
+                "attrib": {
+                  "name": "Supplier"
+                },
+                "text": "LCSC",
+                "children": []
+              }
+            ]
+          },
+          "libsource": {
+            "tag": "libsource",
+            "attrib": {
+              "description": "Resistor, US symbol",
+              "lib": "Stratolink_v1p1_Symbols",
+              "part": "Device_R_US"
+            },
+            "text": "",
+            "children": []
+          },
+          "property": {
+            "tag": "property",
+            "attrib": {
+              "name": "ki_fp_filters",
+              "value": "R_*"
+            },
+            "text": "",
+            "children": []
+          },
+          "units": {
+            "tag": "units",
+            "attrib": {},
+            "text": "",
+            "children": [
+              {
+                "tag": "unit",
+                "attrib": {
+                  "name": "A"
+                },
+                "text": "",
+                "children": [
+                  {
+                    "tag": "pins",
+                    "attrib": {},
+                    "text": "",
+                    "children": [
+                      {
+                        "tag": "pin",
+                        "attrib": {
+                          "num": "1"
+                        },
+                        "text": "",
+                        "children": []
+                      },
+                      {
+                        "tag": "pin",
+                        "attrib": {
+                          "num": "2"
+                        },
+                        "text": "",
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "library_part_changes": [],
+    "changed_top_level_categories": {
+      "symbol": {
+        "before_count": 117,
+        "after_count": 117,
+        "order_only": false
+      }
+    },
+    "symbol_changes": [
+      {
+        "ref": "R1",
+        "changes": [
+          {
+            "key": "property",
+            "before": [
+              [
+                "property",
+                "Reference",
+                "R1",
+                [
+                  "at",
+                  "224.79",
+                  "87.6299",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ],
+                  [
+                    "justify",
+                    "left"
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Value",
+                "7.50M\u03a9",
+                [
+                  "at",
+                  "224.536",
+                  "92.456",
+                  "90"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ],
+                  [
+                    "justify",
+                    "left"
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Footprint",
+                "lib:Stratolink_v1p1_R1_R_0402_1005Metric",
+                [
+                  "at",
+                  "223.266",
+                  "89.154",
+                  "90"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Datasheet",
+                "https://www.lcsc.com/product-detail/C3013187.html",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Description",
+                "FRC0402F7504TS; 7.50 M\u03a9, 1%, 100 ppm/\u00b0C charge-ceiling resistor",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Manufacturer",
+                "FOJAN",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Manufacturer_Part_Number",
+                "FRC0402F7504TS",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Supplier",
+                "LCSC",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "LCSC",
+                "C3013187",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Supplier Part",
+                "C3013187",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "MPN",
+                "FRC0402F7504TS",
+                [
+                  "at",
+                  "0",
+                  "0",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1",
+                      "1"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "LCSC Part #",
+                "C3013187",
+                [
+                  "at",
+                  "0",
+                  "0",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1",
+                      "1"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "after": [
+              [
+                "property",
+                "Reference",
+                "R1",
+                [
+                  "at",
+                  "224.79",
+                  "87.6299",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ],
+                  [
+                    "justify",
+                    "left"
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Value",
+                "7.50M\u03a9",
+                [
+                  "at",
+                  "224.536",
+                  "92.456",
+                  "90"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ],
+                  [
+                    "justify",
+                    "left"
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Footprint",
+                "lib:Stratolink_v1p1_R1_R_0402_1005Metric",
+                [
+                  "at",
+                  "223.266",
+                  "89.154",
+                  "90"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Datasheet",
+                "https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Description",
+                "0402WGF7504TCE; 7.50 M\u03a9, 1%, 100 ppm/\u00b0C charge-ceiling resistor",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Manufacturer",
+                "UNI-ROYAL",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Manufacturer_Part_Number",
+                "0402WGF7504TCE",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Supplier",
+                "LCSC",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "LCSC",
+                "C423135",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "Supplier Part",
+                "C423135",
+                [
+                  "at",
+                  "222.25",
+                  "88.9",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1.27",
+                      "1.27"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "MPN",
+                "0402WGF7504TCE",
+                [
+                  "at",
+                  "0",
+                  "0",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1",
+                      "1"
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "property",
+                "LCSC Part #",
+                "C423135",
+                [
+                  "at",
+                  "0",
+                  "0",
+                  "0"
+                ],
+                [
+                  "hide",
+                  "yes"
+                ],
+                [
+                  "show_name",
+                  "no"
+                ],
+                [
+                  "do_not_autoplace",
+                  "no"
+                ],
+                [
+                  "effects",
+                  [
+                    "font",
+                    [
+                      "size",
+                      "1",
+                      "1"
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "pcb": {
+    "footprint_counts": [
+      68,
+      68
+    ],
+    "physical_pad_counts": [
+      259,
+      259
+    ],
+    "logical_pad_counts": [
+      250,
+      250
+    ],
+    "footprint_metadata_changes": [
+      {
+        "key": "R1",
+        "before": {
+          "uuid": "2be94085-58f7-4e79-8f24-607d013eda4a",
+          "fpid": "Stratolink_v1p1_R1_R_0402_1005Metric|lib",
+          "value": "7.50M\u03a9",
+          "fields": {
+            "Reference": "R1",
+            "Value": "7.50M\u03a9",
+            "Datasheet": "https://www.lcsc.com/product-detail/C3013187.html",
+            "Description": "FRC0402F7504TS; 7.50 M\u03a9, 1%, 100 ppm/\u00b0C charge-ceiling resistor",
+            "Manufacturer": "FOJAN",
+            "Manufacturer_Part_Number": "FRC0402F7504TS",
+            "Supplier": "LCSC",
+            "LCSC": "C3013187",
+            "Supplier Part": "C3013187",
+            "MPN": "FRC0402F7504TS",
+            "LCSC Part #": "C3013187"
+          },
+          "attributes": 2,
+          "sheetname": "/",
+          "sheetfile": "stratolink.kicad_sch",
+          "path": "/e8e2c0ce-b856-4a0c-b119-fdc249b82e36"
+        },
+        "after": {
+          "uuid": "2be94085-58f7-4e79-8f24-607d013eda4a",
+          "fpid": "Stratolink_v1p1_R1_R_0402_1005Metric|lib",
+          "value": "7.50M\u03a9",
+          "fields": {
+            "Reference": "R1",
+            "Value": "7.50M\u03a9",
+            "Datasheet": "https://www.tme.eu/Document/4f50d320a6ddacb273098f84373b6259/rezystor-smd.pdf",
+            "Description": "0402WGF7504TCE; 7.50 M\u03a9, 1%, 100 ppm/\u00b0C charge-ceiling resistor",
+            "Manufacturer": "UNI-ROYAL",
+            "Manufacturer_Part_Number": "0402WGF7504TCE",
+            "Supplier": "LCSC",
+            "LCSC": "C423135",
+            "Supplier Part": "C423135",
+            "MPN": "0402WGF7504TCE",
+            "LCSC Part #": "C423135"
+          },
+          "attributes": 2,
+          "sheetname": "/",
+          "sheetfile": "stratolink.kicad_sch",
+          "path": "/e8e2c0ce-b856-4a0c-b119-fdc249b82e36"
+        }
+      }
+    ],
+    "footprint_pose_changes": [
+      {
+        "key": "C15",
+        "before": {
+          "x_mm": 56.709998,
+          "y_mm": 78.400998,
+          "angle_deg": 0.0,
+          "layer": "F.Cu"
+        },
+        "after": {
+          "x_mm": 56.03,
+          "y_mm": 78.400998,
+          "angle_deg": 0.0,
+          "layer": "F.Cu"
+        }
+      },
+      {
+        "key": "R11",
+        "before": {
+          "x_mm": 68.95,
+          "y_mm": 42.19,
+          "angle_deg": 180.0,
+          "layer": "F.Cu"
+        },
+        "after": {
+          "x_mm": 68.95,
+          "y_mm": 41.84,
+          "angle_deg": 180.0,
+          "layer": "F.Cu"
+        }
+      },
+      {
+        "key": "R21",
+        "before": {
+          "x_mm": 56.698999,
+          "y_mm": 79.546999,
+          "angle_deg": 180.0,
+          "layer": "F.Cu"
+        },
+        "after": {
+          "x_mm": 56.0,
+          "y_mm": 79.546999,
+          "angle_deg": 180.0,
+          "layer": "F.Cu"
+        }
+      }
+    ],
+    "physical_pad_changes": [],
+    "pad_fabrication_metadata_changes": [],
+    "pad_to_net_changes": [],
+    "connected_pad_set_changes": [],
+    "physical_connectivity": [
+      {
+        "side": "before",
+        "native_unconnected_count": 0,
+        "pad_connectivity_mismatches": []
+      },
+      {
+        "side": "after",
+        "native_unconnected_count": 0,
+        "pad_connectivity_mismatches": []
+      }
+    ],
+    "schematic_parity": [
+      {
+        "side": "before",
+        "pad_mapping_mismatches": [
+          {
+            "ref_pin": [
+              "U2",
+              "1"
+            ],
+            "schematic": [
+              "unconnected-(U2-UART2_RX/PA3-Pad1)",
+              "bidirectional+no_connect",
+              "UART2_RX/PA3_1"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-UART2_RX{slash}PA3-Pad1)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "2"
+            ],
+            "schematic": [
+              "unconnected-(U2-UART2_TX/PA2-Pad2)",
+              "bidirectional+no_connect",
+              "UART2_TX/PA2_2"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-UART2_TX{slash}PA2-Pad2)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "13"
+            ],
+            "schematic": [
+              "unconnected-(U2-MOSI/PA7-Pad13)",
+              "bidirectional+no_connect",
+              "MOSI/PA7_13"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-MOSI{slash}PA7-Pad13)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "14"
+            ],
+            "schematic": [
+              "unconnected-(U2-MISO/PA6-Pad14)",
+              "bidirectional+no_connect",
+              "MISO/PA6_14"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-MISO{slash}PA6-Pad14)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "15"
+            ],
+            "schematic": [
+              "unconnected-(U2-SCK/PA5-Pad15)",
+              "bidirectional+no_connect",
+              "SCK/PA5_15"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-SCK{slash}PA5-Pad15)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "16"
+            ],
+            "schematic": [
+              "unconnected-(U2-SS/PA4-Pad16)",
+              "bidirectional+no_connect",
+              "SS/PA4_16"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-SS{slash}PA4-Pad16)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "31"
+            ],
+            "schematic": [
+              "unconnected-(U2-PB4/ADC2-Pad31)",
+              "bidirectional+no_connect",
+              "PB4/ADC2_31"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-PB4{slash}ADC2-Pad31)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "32"
+            ],
+            "schematic": [
+              "unconnected-(U2-PB3/ADC1-Pad32)",
+              "bidirectional+no_connect",
+              "PB3/ADC1_32"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-PB3{slash}ADC1-Pad32)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "H2",
+              "1"
+            ],
+            "schematic": null,
+            "pcb_names": [
+              "GND"
+            ]
+          },
+          {
+            "ref_pin": [
+              "H1",
+              "1"
+            ],
+            "schematic": null,
+            "pcb_names": [
+              "GND"
+            ]
+          }
+        ],
+        "schematic_pins_missing_board_pad": [],
+        "net_escape_equivalents": [
+          [
+            "U2",
+            "1"
+          ],
+          [
+            "U2",
+            "2"
+          ],
+          [
+            "U2",
+            "13"
+          ],
+          [
+            "U2",
+            "14"
+          ],
+          [
+            "U2",
+            "15"
+          ],
+          [
+            "U2",
+            "16"
+          ],
+          [
+            "U2",
+            "31"
+          ],
+          [
+            "U2",
+            "32"
+          ]
+        ],
+        "board_only_suspension_pads": [
+          [
+            "H2",
+            "1"
+          ],
+          [
+            "H1",
+            "1"
+          ]
+        ],
+        "unexplained_pad_mapping_mismatches": []
+      },
+      {
+        "side": "after",
+        "pad_mapping_mismatches": [
+          {
+            "ref_pin": [
+              "U2",
+              "1"
+            ],
+            "schematic": [
+              "unconnected-(U2-UART2_RX/PA3-Pad1)",
+              "bidirectional+no_connect",
+              "UART2_RX/PA3_1"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-UART2_RX{slash}PA3-Pad1)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "2"
+            ],
+            "schematic": [
+              "unconnected-(U2-UART2_TX/PA2-Pad2)",
+              "bidirectional+no_connect",
+              "UART2_TX/PA2_2"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-UART2_TX{slash}PA2-Pad2)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "13"
+            ],
+            "schematic": [
+              "unconnected-(U2-MOSI/PA7-Pad13)",
+              "bidirectional+no_connect",
+              "MOSI/PA7_13"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-MOSI{slash}PA7-Pad13)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "14"
+            ],
+            "schematic": [
+              "unconnected-(U2-MISO/PA6-Pad14)",
+              "bidirectional+no_connect",
+              "MISO/PA6_14"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-MISO{slash}PA6-Pad14)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "15"
+            ],
+            "schematic": [
+              "unconnected-(U2-SCK/PA5-Pad15)",
+              "bidirectional+no_connect",
+              "SCK/PA5_15"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-SCK{slash}PA5-Pad15)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "16"
+            ],
+            "schematic": [
+              "unconnected-(U2-SS/PA4-Pad16)",
+              "bidirectional+no_connect",
+              "SS/PA4_16"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-SS{slash}PA4-Pad16)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "31"
+            ],
+            "schematic": [
+              "unconnected-(U2-PB4/ADC2-Pad31)",
+              "bidirectional+no_connect",
+              "PB4/ADC2_31"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-PB4{slash}ADC2-Pad31)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "U2",
+              "32"
+            ],
+            "schematic": [
+              "unconnected-(U2-PB3/ADC1-Pad32)",
+              "bidirectional+no_connect",
+              "PB3/ADC1_32"
+            ],
+            "pcb_names": [
+              "unconnected-(U2-PB3{slash}ADC1-Pad32)"
+            ]
+          },
+          {
+            "ref_pin": [
+              "H2",
+              "1"
+            ],
+            "schematic": null,
+            "pcb_names": [
+              "GND"
+            ]
+          },
+          {
+            "ref_pin": [
+              "H1",
+              "1"
+            ],
+            "schematic": null,
+            "pcb_names": [
+              "GND"
+            ]
+          }
+        ],
+        "schematic_pins_missing_board_pad": [],
+        "net_escape_equivalents": [
+          [
+            "U2",
+            "1"
+          ],
+          [
+            "U2",
+            "2"
+          ],
+          [
+            "U2",
+            "13"
+          ],
+          [
+            "U2",
+            "14"
+          ],
+          [
+            "U2",
+            "15"
+          ],
+          [
+            "U2",
+            "16"
+          ],
+          [
+            "U2",
+            "31"
+          ],
+          [
+            "U2",
+            "32"
+          ]
+        ],
+        "board_only_suspension_pads": [
+          [
+            "H2",
+            "1"
+          ],
+          [
+            "H1",
+            "1"
+          ]
+        ],
+        "unexplained_pad_mapping_mismatches": []
+      }
+    ]
+  },
+  "source_bytes_unchanged": true,
+  "limitations": [
+    "Checks native saved copper connectivity without refill or save. Root DRC will test strict project settings and refill separately.",
+    "Numeric net codes ignored; comparisons use physical pad UUID, reference/pin number, named net membership and connected pad sets.",
+    "Electrical connectivity checks do not certify RF performance, component clearance, manufacturing or assembly."
+  ]
+}

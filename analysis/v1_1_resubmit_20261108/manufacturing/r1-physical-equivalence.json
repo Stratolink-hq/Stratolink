@@ -1,0 +1,75 @@
+{
+  "result": "PASS",
+  "baseline_git_commit": "320fc08f1bac5861eec2d52345bd23cb4296fcc9",
+  "previous_source_pcb_sha256": "532dfc743b315fc4957f4f9cbb4b5d580ec4ca996b48c89840083dfbd979faf0",
+  "current_source_pcb_sha256": "406a3a0797275d76d41da72e34d95c741453f80384fdd078577d3291b3bdadec",
+  "existing_uploaded_fabrication_zip_sha256": "3d6e5ee781fe8c57edb24daa790908430d78d4476ae0c5875e60102f4f7cb85c",
+  "fresh_fabrication_zip_sha256": "d2c855cd7a11de0a316d5cecd3cd597126b11e0a8000c2260028087dea8f9be3",
+  "normalization": "Creation timestamps only; all other content compared exactly.",
+  "fabrication_files": {
+    "stratolink-B_Cu.gbl": {
+      "previous_sha256": "40194372f9efaf4a09a42ef32c7b4195cd432507eee4212910d2fdafa69a4a1b",
+      "current_sha256": "95c392ae6aab63ee7733076899deaaa6ce31d87af4e0f385540af1f8be0b4a20",
+      "timestamp_normalized_sha256": "47c0cb9061974e45e528836815bc1f381db8f8e2329d26102bf9234aa9eeda22"
+    },
+    "stratolink-B_Mask.gbs": {
+      "previous_sha256": "2dd45704275b70eae69d0e9d135d75d15b72efe072e1217d6379e92f68bf437a",
+      "current_sha256": "ebeac7d84d44d832884fd166e53ac3fe50f19d6e237755d040a89fc662040186",
+      "timestamp_normalized_sha256": "bd63fb5c1deef834470a730e33336bc0c4217848a2a3e4920ccba7c76672dd1e"
+    },
+    "stratolink-B_Paste.gbp": {
+      "previous_sha256": "dcff2188703c99df23519f4bd0139264422e8b3225cdd8bffc967345bc674af2",
+      "current_sha256": "3898df879ea0a11ae14b79ff14b4a6149f08f55ff58d1f6b8d9aa3a47a4195d3",
+      "timestamp_normalized_sha256": "f313fcf6172965999b202f61d2ffb6cfc243f82447ef0950c7f7abb772027948"
+    },
+    "stratolink-B_Silkscreen.gbo": {
+      "previous_sha256": "2ca3fbdb39fe2d61b9be144699a68b65321bf429338824b9c713e3e357fa8583",
+      "current_sha256": "9c5f2f388a6340941b8f62ab19cd1a3ad288c55d2843f02a4f673451f534c5c0",
+      "timestamp_normalized_sha256": "c1cac6dc92043849ba4b72212ae64bc21f8b89ff9b0323631d3294fc81e29b5b"
+    },
+    "stratolink-Edge_Cuts.gm1": {
+      "previous_sha256": "6c6f6e7703e82ba53223fed842a9bd98a3fab539a6b6e9fb6b83fd6e1f573d49",
+      "current_sha256": "7d0f2cae69b7c17b9ba12207e341ee875bb220d37ae34f47dd4e6b394130c4a3",
+      "timestamp_normalized_sha256": "55ee06517c02c6c565f9402f5da9ab57200c3aae8ac62dac09ee748e73b386a2"
+    },
+    "stratolink-F_Cu.gtl": {
+      "previous_sha256": "9b9b004b06f58a6efe5ea143e0ad1c8b2f4dda02580018f1a048c7ff654d1bdb",
+      "current_sha256": "1ff6ae1c4ca05a7010c07cd4d9754132361d548f10ba7e529dac4e7b90288a3a",
+      "timestamp_normalized_sha256": "7c11f24980af0b69dae25d5bd5323bd2aa55282d83a9f6fbe3112332e2b8cd0f"
+    },
+    "stratolink-F_Mask.gts": {
+      "previous_sha256": "07fa01b14d9a4166040c10011f1ee9c7d580e7f67f690c8eb5d0c3349425955c",
+      "current_sha256": "5402bd5363c8a1bac7c333114f239bd82c398dd6db43a25892e3f0097225c60a",
+      "timestamp_normalized_sha256": "7c19cae760373eebd6ee8f44e9cbec4dc9bff263cd854515ee253a84b3775656"
+    },
+    "stratolink-F_Paste.gtp": {
+      "previous_sha256": "e77123c18c23f1dd2f3c1747ee27f334415156516ee608ea4263ecc3b4f63d6c",
+      "current_sha256": "6a878df9261beecaa182ca303db7120c70cc237f18c8931150b75e07e146d4fb",
+      "timestamp_normalized_sha256": "c10c1128618c777d8a600b6d5bc25cadee75e535fe041c5da177dafc59fd7ad4"
+    },
+    "stratolink-F_Silkscreen.gto": {
+      "previous_sha256": "457756fb7c6396e2edb2046297e07de0960b54d05f851de0389d5d2282b08066",
+      "current_sha256": "9fff25513f05dee98ec5ce818eb9fc3d0dde20abb2217a06000751727c254b44",
+      "timestamp_normalized_sha256": "04a22997bb453d0716517d2025d41bff88f900706fd094d722cd38d4f80f69a8"
+    },
+    "stratolink-NPTH.drl": {
+      "previous_sha256": "085c3b86c0bc56db29f00ada2f953b5366a086428d98824172cd007b9adc2725",
+      "current_sha256": "748c20f669b27f35a8c56e5d20996b79a3da63da0684b994a566cdd67caee614",
+      "timestamp_normalized_sha256": "039a289683ccda2fad3f6604060c88aae77f96c9ce3548931107d709be876a68"
+    },
+    "stratolink-PTH.drl": {
+      "previous_sha256": "7d7889fdb1c334889776167bcfa7cfd58f35d0ac8413562616f0977557f28411",
+      "current_sha256": "aea0fb5e19fc8f45f2ff48d7548b088a740bf2271a21dab9e755df08d2b7e9ce",
+      "timestamp_normalized_sha256": "e67e71c0d2f088cccd13a293d3677644d1ebe0f6707d88946cae17c206d44de8"
+    },
+    "stratolink-job.gbrjob": {
+      "previous_sha256": "be7fcf0a8883b115ac81de85791960d18abe66fc4295ebe687583e243d7f4059",
+      "current_sha256": "ee4ac3a64810520a5e91f184f266adf2a6d030d882c7192bbc51c8eb36576000",
+      "timestamp_normalized_sha256": "a623304aa31d225c99c14da85c6b58a69633527105699af79f89e624d9ecbd08"
+    }
+  },
+  "cpl_byte_identical": true,
+  "cpl_sha256": "5f7d3d441e27cf43192db9ea38c0d73ec3c1062cae95c9a48f760238a77caaa8",
+  "required_new_bom_sha256": "c9de8cbc9e537c64ba875f3d0f16821d876550b035b95e464bad5d8df6295894",
+  "permitted_reuse": "Existing uploaded fabrication ZIP may be retained. Replace BOM with the amended R1 selection; CPL is byte-identical. This does not approve supplier CAM or placement."
+}

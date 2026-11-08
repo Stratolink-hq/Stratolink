@@ -5,10 +5,13 @@ PCB layouts, circuit diagrams, and mechanical designs for Stratolink pico-balloo
 
 - [Complete KiCad project and parts library downloads](downloads/README.md)
 - [Current v1.1 board and fabrication notes](pcb/README.md)
-- [Engineer reroute review and exact changes](../analysis/v1_1_engineer_review_20261015/README.md)
-- [Pilot assembly BOM and placement files](gerbers/v1.1-pilot/README.md)
+- [Current replacement review and exact changes](../analysis/v1_1_resubmit_20261108/README.md)
+- [October engineer reroute baseline](../analysis/v1_1_engineer_review_20261015/README.md)
+- [Pilot assembly BOM and placement files](gerbers/v1.1-resubmit-20261108/README.md)
 
 Download and extract the complete project, or copy the library bundle beside the matching KiCad files. The bundles include the added R24–R27, C22/C23 and U8 footprints.
+
+The November 8 revision corrects C15/R21 assembly clearance, adds U2 body/courtyard outlines and moves R11 for GNSS module clearance. R1 now uses **UNI-ROYAL 0402WGF7504TCE / C423135**, with the same 7.50 MΩ value and ±1% tolerance. Its procurement fields changed in the PCB and schematic; the circuit is unchanged. The replacement cart is saved and verified for five PCBs and three assembled pilots. No replacement order has been submitted or paid, and manufacturing has not been approved. Cancellation of the previous Y27 order has been requested but is not yet confirmed.
 
 ## Directory Structure
 - `/pcb` - PCB design files and project files

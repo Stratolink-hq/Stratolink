@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "source_hashes": {
+    "stratolink.kicad_pcb": "406a3a0797275d76d41da72e34d95c741453f80384fdd078577d3291b3bdadec",
+    "stratolink.kicad_sch": "c63bf8333c120048e29ae4d5024a7a088d5c89d096a356b02b6aa4929408f62a"
+  },
+  "net_count": 59,
+  "moved_refs": [
+    "C15",
+    "R21",
+    "R11"
+  ],
+  "circuit_changed": false,
+  "procurement_change": {
+    "ref": "R1",
+    "mpn": "0402WGF7504TCE",
+    "lcsc": "C423135",
+    "value_preserved": "7.50M\u03a9"
+  },
+  "foreign_net_overlaps": [],
+  "disconnected_pad_nets": [],
+  "limitations": "Electrical and saved-copper checks only. Assembly body clearance is checked separately."
+}

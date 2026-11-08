@@ -1,0 +1,11 @@
+{
+  "stratolink.kicad_pcb": "e02bf87186fc86b90569b6ea25041a34c7d2e32ef39b951847956cc2d2eb0f13",
+  "stratolink.kicad_sch": "092ddb3451545cc6f7d7d64d8c02c933e89a40acb6897d865e3a8936d54e21fb",
+  "stratolink.kicad_pro": "f58bea38aac6cc625cfa81c1337565ce660b4cbf57cc3e444dfb5c4099e4dbe4",
+  "stratolink.kicad_dru": "071d900e34c4eb3d3f91003cc0698e261e7fe23beea7107c4db50a1bf60a5136",
+  "fp-lib-table": "705f05b5554f11949b16433700d994932665490bb4f91064f20890cc1c65326a",
+  "sym-lib-table": "6d16fafd9ca5f0074df23d7ad6c75308ece058bd043d1297ce67fa3d25ee519e",
+  "lib/Stratolink_v1p1_U2_RAK3172.kicad_mod": "5d30ca8d063ec6e96c760ec0600b5da9550ef9556d79dd463343427bab363ca3",
+  "lib/Stratolink_v1p1_C15_C_0402_1005Metric.kicad_mod": "47bbcbf140bf70e50fffe3a1be167cc9cf71a35e9f2683fa803f0d5da53dd35e",
+  "lib/Stratolink_v1p1_R21_R_0402_1005Metric.kicad_mod": "4b3d21a82278cb2abcb7243a1c13b56dc34cecba8b2545254651083dd6fcb7ae"
+}

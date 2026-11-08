@@ -1,0 +1,16 @@
+{
+  "time": "2026-11-08T10:14:44.807892",
+  "files": [
+    {
+      "path": "stratolink.kicad_pcb",
+      "before": "e02bf87186fc86b90569b6ea25041a34c7d2e32ef39b951847956cc2d2eb0f13",
+      "after": "532dfc743b315fc4957f4f9cbb4b5d580ec4ca996b48c89840083dfbd979faf0"
+    },
+    {
+      "path": "lib/Stratolink_v1p1_U2_RAK3172.kicad_mod",
+      "before": "5d30ca8d063ec6e96c760ec0600b5da9550ef9556d79dd463343427bab363ca3",
+      "after": "ab55d4614eecc95774572ab2cd12f165b829c44be90c6f671b6b4253a3b33f4d"
+    }
+  ],
+  "source_project_sha256_preserved": "f58bea38aac6cc625cfa81c1337565ce660b4cbf57cc3e444dfb5c4099e4dbe4"
+}
