@@ -22,9 +22,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--scratch', type=Path, required=True)
     parser.add_argument('--standard-models', type=Path, required=True)
+    parser.add_argument('--bundles', type=Path,
+                        default=Path(__file__).resolve().parent / 'v1.1-resubmit-20261108')
+    parser.add_argument('--project', type=Path,
+                        default=Path(__file__).resolve().parent.parent / 'pcb')
     args = parser.parse_args()
-    here = Path(__file__).resolve().parent
-    source = here.parent / 'pcb'
+    here = args.bundles.resolve()
+    source = args.project.resolve()
     manifest = json.loads((here / 'manifest.json').read_text())
     assert sha(source / 'stratolink.kicad_pcb') == manifest['pcb_sha256']
     args.scratch.mkdir(parents=True, exist_ok=True)

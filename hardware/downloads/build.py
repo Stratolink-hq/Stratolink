@@ -31,10 +31,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', type=Path, default=ROOT / 'hardware/pcb')
     parser.add_argument('--manifest', type=Path,
-                        default=ROOT / 'hardware/gerbers/v1.1-final-20261016/manifest.json',
+                        default=ROOT / 'hardware/gerbers/v1.1-resubmit-20261108/manifest.json',
                         help='Verified source manifest; select an older manifest to reproduce that revision.')
+    parser.add_argument('--output', type=Path, default=HERE / 'v1.1-resubmit-20261108',
+                        help='Dated destination; previous download archives are preserved.')
     parser.add_argument('--check', action='store_true', help='Verify stored bundles without writing.')
     args = parser.parse_args()
+    output_dir = args.output.resolve()
+    if not args.check:
+        output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = args.manifest.resolve()
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
@@ -62,7 +67,9 @@ def main():
         'U6 is present in CAD but omitted from the initial pilot assembly.\n'
         'Engineering review files, not factory or flight qualification.\n\n'
         'PCB SHA-256: ' + manifest['source_files']['stratolink.kicad_pcb'] + '\n'
-        'Repository: https://github.com/Stratolink-hq/Stratolink/tree/review/hardware-v1.1\n'
+        'Repository: https://github.com/Stratolink-hq/Stratolink\n'
+        'Manufacturing source manifest: ' + str(manifest_path.relative_to(ROOT) if manifest_path.is_relative_to(ROOT) else manifest_path) + '\n'
+        'Use the PCB hash and source manifest to identify this revision.\n'
     ).encode()
     variants = {
         'stratolink-v1.1-kicad.zip': {**{'stratolink-v1.1/' + n: d for n, d in sources.items()},
@@ -82,14 +89,14 @@ def main():
     }
     output['manifest.json'] = (json.dumps(record, indent=2, sort_keys=True) + '\n').encode()
     if args.check:
-        stored = json.loads((HERE / 'manifest.json').read_text())
+        stored = json.loads((output_dir / 'manifest.json').read_text())
         for key in ('board_revision', 'pcb_sha256', 'source_manifest', 'source_manifest_sha256', 'source_files'):
             if stored[key] != record[key]:
                 raise SystemExit(f'Download manifest is stale: {key}')
         if set(stored['archives']) != set(variants):
             raise SystemExit('Download archive list differs.')
         for name, files in variants.items():
-            data = (HERE / name).read_bytes()
+            data = (output_dir / name).read_bytes()
             expected = stored['archives'][name]
             if digest(data) != expected['sha256'] or expected['members'] != record['archives'][name]['members']:
                 raise SystemExit(f'Download is stale: {name}')
@@ -101,7 +108,7 @@ def main():
                         raise SystemExit(f'Archive member differs: {name}/{member}')
     else:
         for name, data in output.items():
-            (HERE / name).write_bytes(data)
+            (output_dir / name).write_bytes(data)
     print(f'{"Verified" if args.check else "Built"} {len(variants)} bundles from {len(sources)} verified source files.')
 
 
